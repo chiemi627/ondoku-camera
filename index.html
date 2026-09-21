@@ -176,6 +176,7 @@
   input[type="range"]{flex:1;min-width:70px;accent-color:var(--blue);height:24px;}
   select{font-family:inherit;font-size:13px;background:var(--card);color:var(--ink);border:1px solid var(--rule-hard);border-radius:8px;padding:5px 7px;max-width:130px;}
   .hint{font-size:12px;color:var(--ink-faint);text-align:center;margin:14px 0 0;}
+  .hint.quiet{margin-top:8px;opacity:.85;line-height:1.7;}
   svg{display:block;}
 </style>
 </head>
@@ -231,6 +232,7 @@
   </section>
 
   <p class="hint" id="hint">英文をタップすると、その1行だけをくりかえします。点線の語は読みまちがいかもしれません。</p>
+  <p class="hint quiet">音が出ないときは、マナーモード（本体の消音スイッチ）を解除してください。<br>スピーカーだけ鳴らない場合は、Bluetooth の接続が残っていないかも確かめてください。</p>
 
   <div class="ctl" id="voiceWrap" style="justify-content:center;margin-top:10px" hidden>
     <label for="voice">声</label>
