@@ -2,3 +2,6 @@
 .DS_Store
 # Claude アーティファクト版（claude.ai のビューア内でのみ動くため、ここでは配信しない）
 ondoku-camera.html
+
+# 手元での検証用（教材の写真など）。公開しない
+.local/

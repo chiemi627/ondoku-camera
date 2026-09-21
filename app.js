@@ -85,7 +85,9 @@
     capWord:        new RegExp("^[" + LG.UP + "][" + LG.LO + "]+$"),
     vowel:          new RegExp("[" + LG.vowels + "]"),
     acronym:        new RegExp("^[" + LG.UP + "]{1,3}$"),
-    startsLower:    new RegExp("^[" + LG.LO + "]")
+    startsLower:    new RegExp("^[" + LG.LO + "]"),
+    onlyLetters:    new RegExp("^[" + LG.L + "']+$"),
+    mixedCase:      new RegExp("[" + LG.LO + "][" + LG.UP + "]")      // tE, iHit のような大小の混在
   };
 
   // 画面の文言のうち、言語で変わる部分を埋める。
@@ -709,6 +711,7 @@
          .replace(/[ 　]/g, " ");
     s = s.replace(RX.notAllowed, " ");
     s = s.replace(/-{2,}/g, " ").replace(/\.{4,}/g, "...");
+    s = s.replace(/^[\s\-]+/, "");   // 会話の行頭のダッシュ（—Es un amuleto.）
 
     if(((s.match(/"/g) || []).length % 2) === 1){
       s = s.replace(RX.quoteAfterWord, "$1");
@@ -737,42 +740,52 @@
 
   /* ================= 英単語の辞書 ================= */
   var DICT = null, dictPromise = null;
+  // DICT は「語 → よく使われる順位」。順位は、くっついた語を切り分けるときに
+  // 一番自然な切り方を選ぶのに使う（小さいほどよく使われる）。
   function loadDict(){
     if(dictPromise) return dictPromise;
     dictPromise = (async function(){
-      var set = new Set(), got = 0, d = LG.dict;
+      var map = new Map(), d = LG.dict;
       if(d.type === "freq"){
-        // 「語 出現数」が1行ずつ並んだ頻度リスト
+        // 「語 出現数」が、よく使われる順に1行ずつ並んだ頻度リスト
         try{
           var r = await fetch(d.url);
           if(r.ok){
             var freq = Object.create(null);   // constructor などの語で既存の性質に当たらないように
+            var order = [];
             (await r.text()).split(/\r?\n/).forEach(function(line){
               var parts = line.split(" ");
-              if(parts[0]) freq[parts[0].toLowerCase()] = Number(parts[1]) || 0;
+              var w = (parts[0] || "").toLowerCase();
+              if(!w || (w in freq)) return;
+              freq[w] = Number(parts[1]) || 0;
+              order.push(w);
             });
             pruneUnaccented(freq);
-            Object.keys(freq).forEach(function(w){ set.add(w); });
-            if(set.size) got = 1;
+            order.forEach(function(w, i){ if(w in freq) map.set(w, i + 1); });
           }
         }catch(e){}
       } else {
+        // 英語の単語リストは頻度の段（10 = よく使う、20、35 = あまり使わない）に分かれている
         for(var i = 0; i < d.files.length; i++){
+          var tier = /-(\d+)\.json$/.exec(d.files[i]);
+          var rank = { "10":1000, "20":5000, "35":20000 }[tier ? tier[1] : ""] || 30000;
           try{
             var r2 = await fetch(d.base + d.files[i]);
             if(!r2.ok) continue;
             var arr = await r2.json();
             if(Array.isArray(arr)){
-              for(var k = 0; k < arr.length; k++) set.add(String(arr[k]).toLowerCase());
-              got++;
+              for(var k = 0; k < arr.length; k++){
+                var w2 = String(arr[k]).toLowerCase();
+                if(!map.has(w2)) map.set(w2, rank);
+              }
             }
           }catch(e){}
         }
       }
-      if(!got) return null;
-      LG.extra.forEach(function(w){ set.add(w); });
-      DICT = set;
-      return set;
+      if(!map.size) return null;
+      LG.extra.forEach(function(w){ if(!map.has(w)) map.set(w, 3000); });
+      DICT = map;
+      return map;
     })();
     return dictPromise;
   }
@@ -866,11 +879,17 @@
   function notTarget(s){
     if(!DICT) return false;
     var toks = String(s).split(/\s+/).filter(function(t){ return RX.hasLetter.test(t); });
+    if(toks.length === 1){
+      // 1語だけの行で、辞書に無い大文字の羅列（LIA）は誤読とみなす
+      var one = toks[0].replace(RX.leadNon, "").replace(RX.tailNon, "");
+      return one.length >= 2 && one === one.toUpperCase() && RX.hasUpper.test(one) && !DICT.has(one.toLowerCase());
+    }
     if(toks.length < 2) return false;
     var ok = 0;
     toks.forEach(function(t){
       var core = t.replace(RX.leadNon, "").replace(RX.tailNon, "");
       if(!core) return;
+      if(RX.mixedCase.test(core)) return;   // tE, iHit のような大小の混在は語ではない
       var low = core.toLowerCase().split("'")[0];
       // 誤読はたいてい大文字の羅列になる。EL のような短い大文字語は、
       // 辞書に載っていても偶然の一致とみなして数えない
@@ -1162,10 +1181,20 @@
       if(Array.isArray(node.lines)){
         node.lines.forEach(function(l){
           if(l && typeof l.text === "string"){
+            var words = [];
+            (l.words || []).forEach(function(w){
+              if(!w || typeof w.text !== "string" || !w.text.trim()) return;
+              words.push({
+                text: w.text,
+                conf: (typeof w.confidence === "number") ? w.confidence : 100,
+                h: w.bbox ? (w.bbox.y1 - w.bbox.y0) : 0
+              });
+            });
             out.push({
               text: l.text,
               conf: (typeof l.confidence === "number") ? l.confidence : 100,
-              bbox: l.bbox || null
+              bbox: l.bbox || null,
+              words: words
             });
           }
         });
@@ -1186,16 +1215,138 @@
     return { x0:Math.min(a.x0,b.x0), y0:Math.min(a.y0,b.y0), x1:Math.max(a.x1,b.x1), y1:Math.max(a.y1,b.y1) };
   }
 
-  // 英語の認識結果 -> 読み上げる単位の配列（座標つき）
+  // その語が、その言語の単語として成り立ちうるか
+  function plausibleWord(tok){
+    var core = String(tok).replace(RX.leadNon, "").replace(RX.tailNon, "");
+    if(!core) return false;
+    if(/^[0-9]{1,3}$/.test(core)) return true;            // Unidad 3 などの番号
+    if(!RX.onlyLetters.test(core)) return false;          // 数字や記号が混じる
+    if(RX.mixedCase.test(core)) return false;             // tE, iHit のような大小の混在
+    var low = core.toLowerCase();
+    if(DICT && DICT.has(low) && (core.length >= 3 || core === low)) return true;
+    if(RX.capWord.test(core) && RX.vowel.test(core)) return true;
+    // 辞書に無くても、小文字だけで母音を含む語はありうる（“figa” のような固有の言葉）
+    return core === low && core.length >= 2 && RX.vowel.test(core);
+  }
+
+  // 行末から、ゴミとみなせる単語を削る。
+  // 横並びの日本語訳は、その言語の文字として誤読されて行末にくっつく（¿Qué es esto? -hl:f1TI?）。
+  // 単語ごとの信頼度を見ると、本物の単語はおおむね 70 以上、くっついたゴミは 30 以下に分かれる。
+  // ただし本物でも 33 のことがある（Dame）ので、信頼度が低くても単語として成り立つものは残す。
+  function trimWords(words){
+    var ws = words.slice();
+    while(ws.length){
+      var w = ws[ws.length - 1];
+      if(w.conf < 15 || (w.conf < 45 && !plausibleWord(w.text))) ws.pop();
+      else break;
+    }
+    return ws;
+  }
+
+  // 語として通るものが、その行にどれだけあるか（小さい字の行を見分けるのに使う）
+  function hasRealWords(s){
+    var toks = String(s).split(/\s+/).filter(function(t){ return RX.hasLetter.test(t); });
+    if(!toks.length || !DICT) return false;
+    var ok = toks.filter(function(t){
+      var core = t.replace(RX.leadNon, "").replace(RX.tailNon, "");
+      var low = core.toLowerCase();
+      return core.length >= 2 && (core === low || RX.capWord.test(core)) && DICT.has(low);
+    }).length;
+    return ok * 2 >= toks.length;
+  }
+
+  // 太字で字間が詰まると、語の区切りが消える（Esun, ¿Cómosellama?）。
+  // 辞書に無い語を、よく使われる語の組み合わせに切り分けられるか試す。
+  // 切り方が複数あるときは、よく使われる語の組み合わせ（順位の対数の和が小さいもの）を選ぶ。
+  function segment(core, maxRank){
+    function rankOf(w){
+      var r = DICT.get(w);
+      if(!r || r > maxRank) return 0;
+      if(w.length === 1 && LG.singles.indexOf(w) === -1) return 0;   // 1文字で語になるものだけ
+      // 2文字以下の部品は、本当によく使う語に限る。単語リストには断片（fi, ga）も
+      // 語として入っており、これを許すと figa → fi ga のように切ってしまう。
+      // 実測で、よく使う短い語は順位 436 以内、断片は 3119 以降だった。
+      if(w.length <= 2 && r > 1000) return 0;
+      return r;
+    }
+    var n = core.length, best = null, i, j, a, b, c;
+    for(i = 1; i < n; i++){
+      a = rankOf(core.slice(0, i)); b = rankOf(core.slice(i));
+      if(a && b){
+        c = Math.log(a) + Math.log(b);
+        if(!best || c < best.cost) best = { parts:[core.slice(0, i), core.slice(i)], cost:c };
+      }
+    }
+    if(best) return best;   // 2つで切れるなら、3つには切らない
+    for(i = 1; i < n - 1; i++){
+      for(j = i + 1; j < n; j++){
+        a = rankOf(core.slice(0, i)); b = rankOf(core.slice(i, j)); c = rankOf(core.slice(j));
+        if(a && b && c){
+          var cost = Math.log(a) + Math.log(b) + Math.log(c);
+          if(!best || cost < best.cost) best = { parts:[core.slice(0, i), core.slice(i, j), core.slice(j)], cost:cost };
+        }
+      }
+    }
+    return best;
+  }
+
+  function splitMerged(s){
+    if(!DICT) return s;
+    return s.split(/(\s+)/).map(function(p){
+      if(/^\s*$/.test(p)) return p;
+      var lead = (p.match(RX.leadNon) || [""])[0];
+      var tail = (p.match(RX.tailNon) || [""])[0];
+      var core = p.slice(lead.length, p.length - tail.length);
+      if(core.length < 4 || !RX.onlyLetters.test(core)) return p;
+      var cap = RX.capWord.test(core);
+      var low = core.toLowerCase();
+      if(!cap && core !== low) return p;      // 大文字の混じる語（略語など）は扱わない
+      if(DICT.has(low)) return p;
+      // 大文字で始まる語は人名かもしれないので、よく使う語どうしに分かれるときだけ切る
+      var best = segment(low, cap ? 5000 : 20000);
+      if(!best) return p;
+      var parts = best.parts.slice();
+      if(cap) parts[0] = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+      return lead + parts.join(" ") + tail;
+    }).join("");
+  }
+
+  function median(xs){
+    if(!xs.length) return 0;
+    var a = xs.slice().sort(function(x, y){ return x - y; });
+    return a[Math.floor(a.length / 2)];
+  }
+
+  // 認識結果 -> 読み上げる単位の配列（座標つき）
   function cleanUp(raw){
     var lines = [];
     raw.forEach(function(r){
-      if(r.conf < 50) return;
-      var t = tidy(r.text);
+      var text = r.text, conf = r.conf, h = 0;
+      if(r.words && r.words.length){
+        // 行末のゴミを削り、残った単語だけで信頼度と字の高さを測り直す
+        var ws = trimWords(r.words);
+        if(!ws.length) return;
+        text = ws.map(function(w){ return w.text; }).join(" ");
+        conf = ws.reduce(function(sum, w){ return sum + w.conf; }, 0) / ws.length;
+        h = median(ws.filter(function(w){ return w.conf >= 40 && w.h > 0; }).map(function(w){ return w.h; }));
+      }
+      if(conf < 50) return;
+      var t = tidy(text);
       if(!t) return;
+      t = splitMerged(repairLine(t));
       if(looksLikeJunk(t) || notTarget(t)) return;
-      lines.push({ text:t, bbox:r.bbox });
+      lines.push({ text:t, bbox:r.bbox, h:h });
     });
+
+    // 字の小さい行（単語の下に振られた読み仮名など）を落とす。
+    // ただし小さい字でも、ちゃんとした文（指示文など）なら残す。
+    var hs = lines.map(function(l){ return l.h; }).filter(function(x){ return x > 0; }).sort(function(x, y){ return x - y; });
+    var ref = hs.length ? hs[Math.floor(hs.length * 0.75)] : 0;
+    if(ref){
+      lines = lines.filter(function(l){
+        return !(l.h > 0 && l.h < ref * 0.5 && !hasRealWords(l.text));
+      });
+    }
 
     // 折り返された文をつなぐ。
     // 文字の条件（複数語・終止符なし・次の行が小文字始まり）だけでは、終止符のない
@@ -1232,7 +1383,7 @@
     joined.forEach(function(line){
       var parts = line.text.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [line.text];
       parts.forEach(function(p){
-        p = repairLine(p.trim());
+        p = p.trim();
         if(!p || looksLikeJunk(p) || notTarget(p)) return;
         if(out.length && out[out.length-1].en === p) return;
         out.push({ en:p, ja:"", kind: /\s/.test(p) ? "sentence" : "word", bbox: line.bbox });
@@ -1426,6 +1577,7 @@
     trDiagnose: trDiagnose, trGoogleOne: trGoogleOne, trMyMemoryOne: trMyMemoryOne,
     setFixMode: setFixMode, getHistory: getHistory,
     loadDict: loadDict, dictSize: function(){ return DICT ? DICT.size : null; },
+    prepare: prepare, getWorker: getWorker, lang: LG, splitMerged: splitMerged, trimWords: trimWords,
     getItems: function(){ return items; },
     setItems: function(l){ setSheet(l, "テスト", false); },
     getPrefs: function(){ return prefs; }
