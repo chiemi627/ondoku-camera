@@ -328,6 +328,8 @@
   var items = [];
   var playing = false, singleMode = false, cursor = -1, loopLeft = 0;
   var fixMode = false;
+  var fixSnap = null;          // 「なおす」に入ったときの内容（項目ごと）
+  var currentHistoryT = null;  // いま表示しているシートに対応する、きろくの時刻
   var objUrl = null;
   var workers = {}, workerPromise = {}, busy = false;
   var keepAlive = null, waitTimer = null;
@@ -362,11 +364,34 @@
     try{ var r = localStorage.getItem("ondoku-history"); return r ? (JSON.parse(r) || []) : []; }
     catch(e){ return []; }
   }
+  // 保存には読み上げに要るものだけ残す（認識時の座標は捨てる）
+  function slim(list){
+    return list.map(function(x){
+      return { en:x.en, ja:x.ja || "", kind:x.kind || "sentence" };
+    });
+  }
   function pushHistory(list){
+    var t = Date.now();
+    currentHistoryT = t;
     try{
       var h = getHistory();
-      h.unshift({ t: Date.now(), items: list });
+      h.unshift({ t:t, items: slim(list) });
       localStorage.setItem("ondoku-history", JSON.stringify(h.slice(0, 10)));
+    }catch(e){}
+    renderHistory();
+  }
+  // 直した内容を、いま開いているきろくに書き戻す
+  function updateHistory(){
+    if(currentHistoryT == null) return;
+    try{
+      var h = getHistory();
+      for(var i = 0; i < h.length; i++){
+        if(h[i].t === currentHistoryT){
+          h[i].items = slim(items);
+          localStorage.setItem("ondoku-history", JSON.stringify(h));
+          break;
+        }
+      }
     }catch(e){}
     renderHistory();
   }
@@ -393,7 +418,8 @@
       s2.textContent = (rec.items[0] && rec.items[0].en) || "";
       b.appendChild(s1); b.appendChild(s2);
       b.addEventListener("click", function(){
-        setSheet(rec.items.slice(), "きろく", false);
+        setSheet(rec.items.map(function(x){ return { en:x.en, ja:x.ja || "", kind:x.kind }; }), "きろく", false);
+        currentHistoryT = rec.t;   // 直したらこのきろくに書き戻す
         $("history").hidden = true;
         $("btnHistory").setAttribute("aria-pressed","false");
       });
@@ -743,7 +769,7 @@
 
   function setSheet(list, tagText, remember){
     stopAll();
-    if(fixMode) setFixMode(false);
+    if(fixMode) setFixMode(false, true);
     items = list;
     var tag = $("sheetTag");
     tag.textContent = tagText;
@@ -754,15 +780,65 @@
     try{ $("lines").scrollIntoView({ block:"start", behavior:"smooth" }); }catch(e){}
   }
 
-  function setFixMode(on){
+  function setFixMode(on, skipRetranslate){
+    if(on){
+      // 直す前の内容を控えておく。あとで「英語が変わったか」を見るために使う。
+      fixSnap = new Map();
+      items.forEach(function(it){ fixSnap.set(it, { en:it.en, ja:it.ja || "" }); });
+    }
     fixMode = !!on;
     $("btnFix").setAttribute("aria-pressed", fixMode ? "true" : "false");
     $("hint").textContent = fixMode
-      ? "まちがった文字を直したり、いらない行を × でけせます。"
+      ? "まちがった文字を直したり、いらない行を × でけせます。英語を直すと、訳はつけ直されます。"
       : "英文をタップすると、その1行だけをくりかえします。点線の語は読みまちがいかもしれません。";
-    if(!fixMode) items = items.filter(function(x){ return x.en.trim(); });
     stopAll();
+    if(!fixMode){
+      items = items.filter(function(x){ return x.en.trim(); });
+      render();
+      if(skipRetranslate){ fixSnap = null; return; }
+      retranslateEdited();
+      return;
+    }
     render();
+  }
+
+  // 英語を直した行だけ、訳をつけ直す。
+  // 日本語も手で直していたら、そちらを尊重して触らない。
+  function retranslateEdited(){
+    var snap = fixSnap;
+    fixSnap = null;
+    if(!prefs.translate || !snap){ updateHistory(); return; }
+
+    var targets = items.filter(function(it){
+      var s = snap.get(it);
+      if(!s) return !it.ja;                          // あとから増えた行
+      return it.en !== s.en && (it.ja || "") === s.ja;
+    });
+    if(!targets.length){ updateHistory(); return; }
+    fillTranslations(targets, "日本語訳をつけ直しています…");
+  }
+
+  // 訳を入れ直す。失敗した行は前の訳を残し、やり直せるようにする。
+  async function fillTranslations(targets, title){
+    var keep = targets.map(function(it){ return it.ja || ""; });
+    targets.forEach(function(it){ it.ja = ""; });
+    showStatus(title, "", { busy:true, progress:0 });
+    await translateAll(targets, function(p){ showStatus(title, "", { busy:true, progress:p }); });
+
+    var missed = [];
+    targets.forEach(function(it, i){
+      if(!it.ja){ it.ja = keep[i]; missed.push(it); }
+    });
+    render();
+    updateHistory();
+    if(missed.length){
+      showStatus("訳をつけ直せませんでした", missed.length + " 行が前の訳のままです。通信を確かめてください。", {
+        error:true, actionLabel:"もう一度",
+        onAction: function(){ fillTranslations(missed, title); }
+      });
+    } else {
+      hideStatus();
+    }
   }
 
   /* ================= status ================= */
@@ -1355,6 +1431,7 @@
   window.__ondoku = {
     readPhoto: readPhoto, cleanUp: cleanUp, buildSequence: buildSequence,
     extractLines: extractLines, translateAll: translateAll, trFetch: trFetch,
+    setFixMode: setFixMode, getHistory: getHistory,
     getItems: function(){ return items; },
     setItems: function(l){ setSheet(l, "テスト", false); },
     getPrefs: function(){ return prefs; }
