@@ -531,10 +531,26 @@
   function hideStatus(){ $("status").hidden = true; $("statusAction").onclick = null; }
 
   /* ================= image preparation ================= */
+  // createImageBitmap が無い / 使えない端末のための読み込み
+  function loadViaImg(file){
+    return new Promise(function(resolve, reject){
+      var url = URL.createObjectURL(file);
+      var im = new Image();
+      im.onload = function(){ resolve(im); };
+      im.onerror = function(){ URL.revokeObjectURL(url); reject(new Error("decode")); };
+      im.src = url;
+    });
+  }
+
   async function prepare(file){
-    var bmp;
-    try{ bmp = await createImageBitmap(file, { imageOrientation:"from-image" }); }
-    catch(e){ bmp = await createImageBitmap(file); }
+    var bmp = null;
+    if(typeof createImageBitmap === "function"){
+      try{ bmp = await createImageBitmap(file, { imageOrientation:"from-image" }); }
+      catch(e){
+        try{ bmp = await createImageBitmap(file); }catch(e2){ bmp = null; }
+      }
+    }
+    if(!bmp) bmp = await loadViaImg(file);   // <img> は向き情報をブラウザ側で適用してくれる
 
     var long = Math.max(bmp.width, bmp.height);
     var scale = 1;
