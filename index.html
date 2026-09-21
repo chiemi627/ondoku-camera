@@ -23,7 +23,7 @@
     --ink:#1a2236; --ink-soft:#5d687f; --ink-faint:#8a93a6;
     --rule:#e2dcd0; --rule-hard:#cfc7b7;
     --blue:#2a5db0; --blue-ink:#2a5db0; --blue-wash:#e9eff9;
-    --red:#c8402f; --red-wash:#fbe9e6; --green:#2c7a5c;
+    --red:#c8402f; --red-wash:#fbe9e6; --green:#2c7a5c; --say-fg:#ffffff;
     --shadow:0 1px 2px rgba(26,34,54,.06), 0 6px 18px rgba(26,34,54,.07);
     --shadow-lift:0 2px 4px rgba(26,34,54,.08), 0 12px 28px rgba(26,34,54,.12);
     --radius:14px;
@@ -38,7 +38,7 @@
       --ink:#eef1f7; --ink-soft:#a3adc2; --ink-faint:#7b8499;
       --rule:#2b3341; --rule-hard:#3a4353;
       --blue:#7fa8ee; --blue-ink:#9dbdf5; --blue-wash:#1d2838;
-      --red:#f0897a; --red-wash:#341f1c; --green:#65c39c;
+      --red:#f0897a; --red-wash:#341f1c; --green:#65c39c; --say-fg:#12161d;
       --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
       --shadow-lift:0 2px 4px rgba(0,0,0,.45), 0 12px 28px rgba(0,0,0,.5);
     }
@@ -47,7 +47,7 @@
   body{
     margin:0; background:var(--paper); color:var(--ink);
     font-family:var(--font-jp); font-size:15px; line-height:1.6;
-    padding-inline:16px; padding-bottom:180px;
+    padding-inline:16px; padding-bottom:190px;
     -webkit-text-size-adjust:100%; -webkit-tap-highlight-color:transparent;
   }
   img{max-width:100%;}
@@ -138,6 +138,9 @@
     background-repeat:no-repeat;background-size:0 2px;background-position:0 100%;
     transition:background-size .28s ease;
   }
+  li.line .en .w{border-radius:5px;padding:0 2px;margin:0 -2px;}
+  li.line.now .en .w.say{background:var(--red);color:var(--say-fg);}
+  li.line.now .en .w.say.sus{text-decoration:none;}
   li.line .en .sus{
     text-decoration:underline dotted var(--red);
     text-decoration-thickness:2px; text-underline-offset:4px;
@@ -228,6 +231,11 @@
   </section>
 
   <p class="hint" id="hint">英文をタップすると、その1行だけをくりかえします。点線の語は読みまちがいかもしれません。</p>
+
+  <div class="ctl" id="voiceWrap" style="justify-content:center;margin-top:10px" hidden>
+    <label for="voice">声</label>
+    <select id="voice"></select>
+  </div>
 </div>
 
 <div class="dock">
@@ -240,18 +248,22 @@
     <div class="controls">
       <div class="ctl speed">
         <label for="rate">はやさ</label>
-        <input type="range" id="rate" min="0.5" max="1.2" step="0.05" value="0.85">
+        <input type="range" id="rate" min="0.3" max="1.2" step="0.05" value="0.85">
         <span id="rateVal" style="font-variant-numeric:tabular-nums;font-family:var(--font-en)">0.85</span>
+      </div>
+      <div class="ctl">
+        <label for="mode">読み方</label>
+        <select id="mode">
+          <option value="whole">ふつう</option>
+          <option value="chunk">くぎって</option>
+          <option value="word">1語ずつ</option>
+        </select>
       </div>
       <div class="ctl">
         <label for="repeat">くりかえし</label>
         <select id="repeat"><option value="1">1回</option><option value="2">2回</option><option value="3">3回</option></select>
       </div>
       <button class="ghost" id="btnFix" aria-pressed="false">なおす</button>
-      <div class="ctl" id="voiceWrap" hidden>
-        <label for="voice">声</label>
-        <select id="voice"></select>
-      </div>
     </div>
   </div>
 </div>
@@ -272,7 +284,7 @@
   var objUrl = null;
   var worker = null, workerReady = null, busy = false;
   var keepAlive = null;
-  var prefs = { rate:0.85, repeat:1, voice:"" };
+  var prefs = { rate:0.85, repeat:1, voice:"", mode:"whole" };
 
   var SAMPLE = [
     { en:"Read the passage and answer the questions.", kind:"heading" },
@@ -382,6 +394,8 @@
   /* ================= playback ================= */
   function setNow(i){
     var els = $("lines").children;
+    var said = $("lines").querySelectorAll(".en .w.say");
+    for(var m = 0; m < said.length; m++) said[m].classList.remove("say");
     for(var k=0;k<els.length;k++) els[k].classList.toggle("now", k === i);
     if(i >= 0 && els[i]){ try{ els[i].scrollIntoView({ block:"center", behavior:"smooth" }); }catch(e){} }
     $("playPos").textContent = (playing && !singleMode && i >= 0) ? (i+1) + " / " + items.length : "";
@@ -391,19 +405,69 @@
     playing = true; singleMode = !!single; cursor = i; loopLeft = prefs.repeat;
     updatePlayButton(); step();
   }
+  // 1行をどう区切って読むかを決める。
+  // whole = 文まるごと / chunk = 意味のかたまり / word = 1語ずつ
+  function chunkGroups(text, mode){
+    var toks = text.split(/\s+/).filter(Boolean);
+    if(!toks.length) return [{ text:text, idx:null }];
+
+    if(mode === "word"){
+      return toks.map(function(t, i){ return { text:t, idx:[i] }; });
+    }
+    if(mode === "chunk"){
+      var out = [], cur = [], curIdx = [];
+      toks.forEach(function(t, i){
+        cur.push(t); curIdx.push(i);
+        if(/[,;:.!?]["')\]]?$/.test(t) || cur.length >= 4){
+          out.push({ text:cur.join(" "), idx:curIdx });
+          cur = []; curIdx = [];
+        }
+      });
+      if(cur.length) out.push({ text:cur.join(" "), idx:curIdx });
+      return out;
+    }
+    return [{ text:text, idx:null }];
+  }
+
+  // いま読んでいる語に印をつける
+  function highlight(lineIndex, idx){
+    var el = $("lines").children[lineIndex];
+    if(!el) return;
+    var ws = el.querySelectorAll(".en .w");
+    for(var i = 0; i < ws.length; i++){
+      ws[i].classList.toggle("say", !!idx && idx.indexOf(i) !== -1);
+    }
+  }
+
   function step(){
     if(!playing) return;
     if(cursor < 0 || cursor >= items.length){ stopAll(); return; }
     setNow(cursor);
-    speak(items[cursor].en, function(){
-      if(!playing) return;
-      loopLeft -= 1;
-      if(loopLeft > 0){ setTimeout(step, 420); return; }
-      if(singleMode){ stopAll(); return; }
-      cursor += 1; loopLeft = prefs.repeat;
-      if(cursor >= items.length){ stopAll(); return; }
-      setTimeout(step, 520);
-    });
+
+    var line = cursor;
+    var groups = chunkGroups(items[line].en, prefs.mode);
+    var gap = prefs.mode === "word" ? 350 : (prefs.mode === "chunk" ? 500 : 0);
+    var gi = 0;
+
+    (function sayNext(){
+      if(!playing || cursor !== line) return;
+      if(gi >= groups.length){ highlight(line, null); afterLine(); return; }
+      highlight(line, groups[gi].idx);
+      speak(groups[gi].text, function(){
+        if(!playing || cursor !== line) return;
+        gi++;
+        setTimeout(sayNext, gi < groups.length ? gap : 0);
+      });
+    })();
+  }
+
+  function afterLine(){
+    loopLeft -= 1;
+    if(loopLeft > 0){ setTimeout(step, 420); return; }
+    if(singleMode){ stopAll(); return; }
+    cursor += 1; loopLeft = prefs.repeat;
+    if(cursor >= items.length){ stopAll(); return; }
+    setTimeout(step, 520);
   }
   function stopAll(){
     playing = false; singleMode = false; cursor = -1;
@@ -466,19 +530,19 @@
       } else {
         var en = document.createElement("span");
         en.className = "en";
-        // 辞書に無い語だけ点線を引く。読み上げには影響しない。
+        // 語ごとに span を作る。読み上げ中の強調と、辞書に無い語の点線に使う。
         it.en.split(/(\s+)/).forEach(function(p){
           if(!p) return;
-          if(/^\s+$/.test(p) || wordStatus(p) !== "bad"){
-            en.appendChild(document.createTextNode(p));
-          } else {
-            var sp = document.createElement("span");
-            sp.className = "sus";
-            sp.textContent = p;
+          if(/^\s+$/.test(p)){ en.appendChild(document.createTextNode(p)); return; }
+          var sp = document.createElement("span");
+          sp.className = "w";
+          sp.textContent = p;
+          if(wordStatus(p) === "bad"){
+            sp.classList.add("sus");
             sp.title = "読みまちがいかもしれません";
-            en.appendChild(sp);
             suspects++;
           }
+          en.appendChild(sp);
         });
         body.appendChild(en);
         li.appendChild(body);
@@ -899,6 +963,11 @@
     prefs.rate = parseFloat(this.value);
     $("rateVal").textContent = prefs.rate.toFixed(2);
     savePrefs();
+  });
+  $("mode").value = prefs.mode;
+  $("mode").addEventListener("change", function(){
+    prefs.mode = this.value; savePrefs();
+    if(playing){ stopSpeaking(); step(); }   // 読んでいる途中でも、その行から切り替える
   });
   $("repeat").addEventListener("change", function(){
     prefs.repeat = parseInt(this.value, 10) || 1; savePrefs();
