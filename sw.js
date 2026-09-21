@@ -2,21 +2,33 @@
    アプリ本体は「通信優先・失敗したらキャッシュ」、
    OCRエンジンや辞書データ・フォントは「キャッシュ優先」で保存する。 */
 
-var VERSION = "ondoku-v1";
+var VERSION = "ondoku-v2";   // 共通の app.js / app.css とスペイン語版を足した
 var SHELL = [
+  // 英語版と共通の本体
+  "./app.js",
+  "./app.css",
+  // 英語版
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icon.svg",
   "./icon-192.png",
   "./icon-512.png",
-  "./apple-touch-icon.png"
+  "./apple-touch-icon.png",
+  // スペイン語版
+  "./es/",
+  "./es/index.html",
+  "./es/manifest.webmanifest",
+  "./es/icon.svg",
+  "./es/icon-192.png",
+  "./es/icon-512.png",
+  "./es/apple-touch-icon.png"
 ];
 
 // 初回に取りに行ったら、次回以降はキャッシュから返す相手。
 var RUNTIME_HOSTS = [
-  "cdn.jsdelivr.net",              // tesseract.js 本体・WASM
-  "tessdata.projectnaptha.com",    // 英語の学習済みデータ
+  "cdn.jsdelivr.net",              // tesseract.js 本体・WASM、単語リスト
+  "tessdata.projectnaptha.com",    // 英語・スペイン語の学習済みデータ
   "fonts.googleapis.com",
   "fonts.gstatic.com"
 ];
@@ -61,7 +73,10 @@ self.addEventListener("fetch", function(e){
         return res;
       }).catch(function(){
         return caches.match(req).then(function(hit){
-          return hit || caches.match("./index.html");
+          if(hit) return hit;
+          // オフラインで入口そのものが無いときは、その言語の入口を返す
+          var home = url.pathname.indexOf("/es/") !== -1 ? "./es/index.html" : "./index.html";
+          return caches.match(home);
         });
       })
     );

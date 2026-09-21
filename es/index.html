@@ -1,23 +1,24 @@
 <!doctype html>
+<!-- このファイルは tools/build-es.py が index.html から作る。直接は編集しない。 -->
 <html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>おんどくカメラ</title>
-<meta name="description" content="英語のプリントをカメラで撮ると、英文を抜き出し、日本語訳をつけて読み上げます。">
+<title>おんどくカメラ スペイン語</title>
+<meta name="description" content="スペイン語のプリントをカメラで撮ると、文を抜き出し、日本語訳をつけて読み上げます。">
 <meta name="theme-color" content="#f6f3ec" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#12161d" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="おんどく">
+<meta name="apple-mobile-web-app-title" content="おんどくES">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&family=Zen+Maru+Gothic:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="../app.css">
 </head>
 <body>
 
@@ -144,7 +145,7 @@
 <input type="file" id="fileLibrary" accept="image/*" hidden>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
-<script>window.ONDOKU = { lang: "en" };</script>
-<script src="app.js"></script>
+<script>window.ONDOKU = { lang: "es", base: "../" };</script>
+<script src="../app.js"></script>
 </body>
 </html>
