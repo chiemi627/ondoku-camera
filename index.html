@@ -820,6 +820,7 @@
 
   // 訳を入れ直す。失敗した行は前の訳を残し、やり直せるようにする。
   async function fillTranslations(targets, title){
+    trLastError = "";
     var keep = targets.map(function(it){ return it.ja || ""; });
     targets.forEach(function(it){ it.ja = ""; });
     showStatus(title, "", { busy:true, progress:0 });
@@ -832,10 +833,12 @@
     render();
     updateHistory();
     if(missed.length){
-      showStatus("訳をつけ直せませんでした", missed.length + " 行が前の訳のままです。通信を確かめてください。", {
-        error:true, actionLabel:"もう一度",
-        onAction: function(){ fillTranslations(missed, title); }
-      });
+      showStatus(
+        missed.length + " 行に訳をつけられませんでした",
+        (trLastError ? "理由: " + trLastError + "。" : "") + "英語の読み上げはそのまま使えます。",
+        { error:true, actionLabel:"もう一度",
+          onAction: function(){ fillTranslations(missed, title); } }
+      );
     } else {
       hideStatus();
     }
@@ -1079,32 +1082,73 @@
     }catch(e){}
   }
 
-  // 改行でつないで1回で送り、返ってきた原文で対応づける（順番だけに頼らない）
-  function trFetch(batch){
+  var trLastError = "";
+
+  function trRequest(q){
     var url = "https://translate.googleapis.com/translate_a/single?" +
-      new URLSearchParams({ client:"gtx", sl:"en", tl:"ja", dt:"t", q:batch.join("\n") }).toString();
+      new URLSearchParams({ client:"gtx", sl:"en", tl:"ja", dt:"t", q:q }).toString();
     var ctl = new AbortController();
     var timer = setTimeout(function(){ ctl.abort(); }, 15000);
     return fetch(url, { signal: ctl.signal }).then(function(r){
-      if(!r.ok) throw new Error("http " + r.status);
-      return r.json();
-    }).then(function(j){
       clearTimeout(timer);
-      var segs = (j && j[0]) || [];
-      var bySrc = {}, order = [];
-      segs.forEach(function(seg){
-        if(!seg) return;
-        var dst = String(seg[0] == null ? "" : seg[0]).replace(/\n/g, "").trim();
-        var src = String(seg[1] == null ? "" : seg[1]).replace(/\n/g, "").trim();
-        order.push(dst);
-        if(src) bySrc[src] = dst;
-      });
-      return batch.map(function(en, i){
-        var hit = bySrc[en.trim()];
-        if(hit !== undefined) return hit;
-        return order.length === batch.length ? order[i] : "";
-      });
-    }, function(e){ clearTimeout(timer); throw e; });
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }, function(e){
+      clearTimeout(timer);
+      var name = e && e.name;
+      throw new Error(name === "AbortError" ? "時間切れ" : ((e && e.message) || "通信できません"));
+    });
+  }
+
+  // 返ってきた訳を、原文と並び順の両方から引けるようにする
+  function trSegments(j){
+    var segs = (j && j[0]) || [];
+    var bySrc = {}, order = [];
+    segs.forEach(function(seg){
+      if(!seg) return;
+      var dst = String(seg[0] == null ? "" : seg[0]).replace(/\n/g, "").trim();
+      var src = String(seg[1] == null ? "" : seg[1]).replace(/\n/g, "").trim();
+      order.push(dst);
+      if(src) bySrc[src] = dst;
+    });
+    return { bySrc:bySrc, order:order };
+  }
+
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+  // 改行でつないで1回で送る。翻訳側は文単位で区切るので、行と1対1に
+  // ならないことがある。取りこぼした行だけ1行ずつ送り直す。
+  async function trBatch(batch){
+    var out = [];
+    for(var n = 0; n < batch.length; n++) out.push("");
+    var batchOk = false;
+
+    try{
+      var m = trSegments(await trRequest(batch.join("\n")));
+      batchOk = true;
+      for(var i = 0; i < batch.length; i++){
+        var hit = m.bySrc[batch[i].trim()];
+        if(hit) out[i] = hit;
+        else if(m.order.length === batch.length && m.order[i]) out[i] = m.order[i];
+      }
+    }catch(e){
+      trLastError = e.message || "通信できません";
+    }
+
+    // まとめ送りが通ったのに取りこぼした行だけ、個別に送り直す。
+    // 通信自体が駄目だったときは、同じ失敗を繰り返さない。
+    if(batchOk){
+      for(var k = 0; k < batch.length; k++){
+        if(out[k]) continue;
+        try{
+          await sleep(200);
+          out[k] = trSegments(await trRequest(batch[k])).order.join("").trim();
+        }catch(e2){
+          trLastError = e2.message || "通信できません";
+        }
+      }
+    }
+    return out;
   }
 
   async function translateAll(list, onProgress){
@@ -1121,7 +1165,7 @@
     // URL が長くなりすぎないよう、文字数と件数で区切る
     var batches = [], cur = [], len = 0;
     todo.forEach(function(t){
-      if(cur.length && (len + t.length > 1100 || cur.length >= 12)){ batches.push(cur); cur = []; len = 0; }
+      if(cur.length && (len + t.length > 1000 || cur.length >= 8)){ batches.push(cur); cur = []; len = 0; }
       cur.push(t); len += t.length + 1;
     });
     if(cur.length) batches.push(cur);
@@ -1129,19 +1173,15 @@
     var done = 0, failed = 0, at = 0;
     for(var b = 0; b < batches.length; b++){
       var batch = batches[b];
-      try{
-        var res = await trFetch(batch);
-        for(var k = 0; k < batch.length; k++){
-          var ja = res[k] || "";
-          if(ja){
-            cache[batch[k]] = ja;
-            done++;
-            if(list[idx[at + k]]) list[idx[at + k]].ja = ja;
-          } else failed++;
-        }
-      }catch(e){
-        failed += batch.length;
-        if(window.console) console.warn("翻訳に失敗:", e);
+      if(b > 0) await sleep(250);
+      var res = await trBatch(batch);
+      for(var k = 0; k < batch.length; k++){
+        var ja = res[k] || "";
+        if(ja){
+          cache[batch[k]] = ja;
+          done++;
+          if(list[idx[at + k]]) list[idx[at + k]].ja = ja;
+        } else failed++;
       }
       at += batch.length;
       if(onProgress) onProgress((b + 1) / batches.length);
@@ -1254,7 +1294,6 @@
     if(busy) return;
     busy = true;
     stopAll();
-    var trWarn = false;
     try{
       showStatus("写真を準備しています…", "", { busy:true, progress:0 });
       var canvas = await prepare(file);
@@ -1271,18 +1310,11 @@
         return;
       }
 
-      if(prefs.translate){
-        showStatus("日本語訳をつけています…", "", { busy:true, progress:0 });
-        var tr = await translateAll(list, function(p){
-          showStatus("日本語訳をつけています…", "", { busy:true, progress:p });
-        });
-        trWarn = tr.failed > 0 && tr.done === 0;
-      }
-
+      // 先に英文を出す。訳を待たずに読み上げを始められるようにするため。
       hideStatus();
       setSheet(list, "このプリント", true);
-      if(trWarn){
-        showStatus("日本語訳をつけられませんでした", "通信できないときは英語だけになります。「なおす」で手で入れられます。", { error:true });
+      if(prefs.translate){
+        await fillTranslations(list, "日本語訳をつけています…");
       }
     }catch(err){
       var msg = (err && err.message) || "";
@@ -1374,14 +1406,11 @@
   $("btnManualGo").addEventListener("click", async function(){
     var list = parseManual($("manualText").value || "");
     if(!list.length){ showStatus("英文が入力されていません", "1行に1文ずつ入れてください。", { error:true }); return; }
-    if(prefs.translate){
-      showStatus("日本語訳をつけています…", "", { busy:true, progress:0 });
-      await translateAll(list, function(p){
-        showStatus("日本語訳をつけています…", "", { busy:true, progress:p });
-      });
-    }
     hideStatus();
     setSheet(list, "入力した英文", true);
+    if(prefs.translate){
+      await fillTranslations(list, "日本語訳をつけています…");
+    }
   });
 
   function togglePanel(id, btnId){
@@ -1430,7 +1459,7 @@
   // ローカル検証用の入口（通常の利用では使いません）
   window.__ondoku = {
     readPhoto: readPhoto, cleanUp: cleanUp, buildSequence: buildSequence,
-    extractLines: extractLines, translateAll: translateAll, trFetch: trFetch,
+    extractLines: extractLines, translateAll: translateAll, trBatch: trBatch,
     setFixMode: setFixMode, getHistory: getHistory,
     getItems: function(){ return items; },
     setItems: function(l){ setSheet(l, "テスト", false); },
