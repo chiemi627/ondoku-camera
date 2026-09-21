@@ -68,7 +68,7 @@ Service Worker がそれらを保存するので、2回目からはオフライ�
 
 ## 開発
 
-静的ファイルだけ。スペイン語版の入口だけは `tools/build-es.py` で作る。
+静的ファイルだけ。ただし **push の前に必ず `python3 tools/build.py` を実行する**（下の「変更するとき」を参照）。
 
 ```bash
 python3 -m http.server 8765
@@ -83,15 +83,16 @@ python3 -m http.server 8765
 | `app.js` | 処理本体。英語版とスペイン語版で共有する。言語による違いは冒頭の `LANGS` にだけ書く |
 | `app.css` | 見た目。両版で共有 |
 | `index.html` | 英語版の入口（画面の構成） |
-| `es/index.html` | スペイン語版の入口。**`tools/build-es.py` が `index.html` から作る。直接は編集しない** |
+| `es/index.html` | スペイン語版の入口。**`tools/build.py` が `index.html` から作る。直接は編集しない** |
 | `sw.js` | オフライン用のキャッシュ（両版を一括で扱う） |
 | `manifest.webmanifest`, `es/manifest.webmanifest` | ホーム画面に追加したときの設定 |
 | アイコン類 | `tools/make-icons.py` が作る |
 
 ### 変更するとき
 
+- **何を直しても、push の前に `python3 tools/build.py` を実行する。** `app.js`・`app.css` の中身から版の番号を作って読み込み先に `?v=番号` を付け、スペイン語版の入口を作り直す。GitHub Pages はファイルを10分間キャッシュさせる（`max-age=600`）ので、番号が変わらないと公開直後に古いファイルが使われる。動いている版は、設定の画面に「版 d2b3d9ab」のように出る
 - 処理を直す → `app.js` だけ直せば両版に効く
-- 画面の構成を直す → `index.html` を直してから `python3 tools/build-es.py`
+- 画面の構成を直す → `index.html` だけ直す（スペイン語版の入口は `build.py` が作る）
 - 言語で変わる文言は、HTML では `{L}`（言語名）・`{T}`（文の呼び方）と書いて `data-t` を付ける
 - 新しい言語を足す → `LANGS` に1項目足し、`build-es.py` にならって入口を作る
 

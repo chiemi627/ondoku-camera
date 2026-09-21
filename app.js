@@ -61,6 +61,13 @@
       ]
     }
   };
+  // どの版が動いているかを画面で確かめられるように、読み込まれたときの ?v= を覚えておく
+  var APP_VER = (function(){
+    try{
+      var m = /[?&]v=([0-9a-z]+)/i.exec((document.currentScript || {}).src || "");
+      return m ? m[1] : "dev";
+    }catch(e){ return "dev"; }
+  })();
   var CFG = window.ONDOKU || {};
   var LG = LANGS[CFG.lang] || LANGS.en;
   var BASE = CFG.base || "";
@@ -98,6 +105,8 @@
     var ph = document.querySelectorAll("[data-tp]");
     for(var k = 0; k < ph.length; k++) ph[k].setAttribute("placeholder", T(ph[k].getAttribute("placeholder") || ""));
     // 英語版以外は、見出しに言語の札を出して取り違えを防ぐ
+    var ver = document.getElementById("appVer");
+    if(ver) ver.textContent = "版 " + APP_VER + "（不具合を知らせるときに添えてください）";
     var tag = document.getElementById("langTag");
     if(tag && LG !== LANGS.en){ tag.textContent = LG.name; tag.hidden = false; }
   })();

@@ -2,7 +2,7 @@
    アプリ本体は「通信優先・失敗したらキャッシュ」、
    OCRエンジンや辞書データ・フォントは「キャッシュ優先」で保存する。 */
 
-var VERSION = "ondoku-v2";   // 共通の app.js / app.css とスペイン語版を足した
+var VERSION = "ondoku-v3";   // 公開直後でも古いファイルを使わないようにした
 var SHELL = [
   // 英語版と共通の本体
   "./app.js",
@@ -64,15 +64,19 @@ self.addEventListener("fetch", function(e){
 
   if(url.origin === self.location.origin){
     // アプリ本体: 新しい版があればそちらを使い、オフラインならキャッシュ
+    // GitHub Pages はファイルを10分間キャッシュさせる（max-age=600）。そのまま取りに行くと、
+    // 公開直後に古い app.js が使われてしまう。毎回サーバーに更新の有無を確かめる
+    // （変わっていなければ 304 が返るだけで、通信量はほとんど増えない）。
     e.respondWith(
-      fetch(req).then(function(res){
+      fetch(req, { cache: "no-cache" }).then(function(res){
         if(res && res.ok){
           var copy = res.clone();
           caches.open(VERSION).then(function(c){ try{ c.put(req, copy); }catch(err){} });
         }
         return res;
       }).catch(function(){
-        return caches.match(req).then(function(hit){
+        // app.js?v=… のように版を付けて読むので、オフライン時は ? 以降を無視して探す
+        return caches.match(req, { ignoreSearch: true }).then(function(hit){
           if(hit) return hit;
           // オフラインで入口そのものが無いときは、その言語の入口を返す
           var home = url.pathname.indexOf("/es/") !== -1 ? "./es/index.html" : "./index.html";
