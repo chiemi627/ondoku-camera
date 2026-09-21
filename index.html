@@ -138,6 +138,10 @@
     background-repeat:no-repeat;background-size:0 2px;background-position:0 100%;
     transition:background-size .28s ease;
   }
+  li.line .en .sus{
+    text-decoration:underline dotted var(--red);
+    text-decoration-thickness:2px; text-underline-offset:4px;
+  }
   li.line .spk{flex:none;align-self:center;width:38px;height:38px;border-radius:50%;border:1px solid var(--rule);background:var(--card-2);display:grid;place-items:center;color:var(--blue-ink);}
   li.line.word .en{font-size:22px;font-weight:600;}
   li.line.heading .en{font-size:15px;font-weight:600;color:var(--ink-soft);}
@@ -223,7 +227,7 @@
     <ol class="lines" id="lines"></ol>
   </section>
 
-  <p class="hint" id="hint">英文をタップすると、その1行だけをくりかえします。</p>
+  <p class="hint" id="hint">英文をタップすると、その1行だけをくりかえします。点線の語は読みまちがいかもしれません。</p>
 </div>
 
 <div class="dock">
@@ -419,6 +423,7 @@
   /* ================= rendering ================= */
   function render(){
     var ol = $("lines");
+    var suspects = 0;
     ol.innerHTML = "";
     if(!items.length){
       var p = document.createElement("li");
@@ -460,7 +465,21 @@
         li.appendChild(del);
       } else {
         var en = document.createElement("span");
-        en.className = "en"; en.textContent = it.en;
+        en.className = "en";
+        // 辞書に無い語だけ点線を引く。読み上げには影響しない。
+        it.en.split(/(\s+)/).forEach(function(p){
+          if(!p) return;
+          if(/^\s+$/.test(p) || wordStatus(p) !== "bad"){
+            en.appendChild(document.createTextNode(p));
+          } else {
+            var sp = document.createElement("span");
+            sp.className = "sus";
+            sp.textContent = p;
+            sp.title = "読みまちがいかもしれません";
+            en.appendChild(sp);
+            suspects++;
+          }
+        });
         body.appendChild(en);
         li.appendChild(body);
 
@@ -479,7 +498,8 @@
       }
       ol.appendChild(li);
     });
-    $("sheetCount").textContent = items.length + " 行";
+    $("sheetCount").textContent = items.length + " 行"
+      + (suspects ? " ・ あやしい " + suspects + " 語" : "");
     updatePlayButton();
   }
 
@@ -507,7 +527,7 @@
     $("btnFix").setAttribute("aria-pressed", fixMode ? "true" : "false");
     $("hint").textContent = fixMode
       ? "まちがった文字を直したり、いらない行を × でけせます。"
-      : "英文をタップすると、その1行だけをくりかえします。";
+      : "英文をタップすると、その1行だけをくりかえします。点線の語は読みまちがいかもしれません。";
     if(!fixMode) items = items.filter(function(x){ return x.en.trim(); });
     stopAll();
     render();
@@ -630,6 +650,8 @@
       showStatus("文字を読み取っています…", "", { busy:true, progress:0 });
       var res = await worker.recognize(canvas, {}, { text:true, blocks:true });
 
+      try{ await loadDict(); }catch(e){}   // 読み込めなければ辞書なしで続行
+
       var raw = extractLines(res && res.data);
       var list = cleanUp(raw);
 
@@ -676,6 +698,131 @@
     return out;
   }
 
+  /* ---- 英文の掃除（記号ノイズ・分断された短縮形） ---- */
+  function tidy(s){
+    s = String(s);
+    // 全角・特殊な引用符やダッシュを ASCII に寄せる
+    s = s.replace(/[‘’ʼ＇]/g, "'")
+         .replace(/[“”＂]/g, '"')
+         .replace(/[‐-―－]/g, "-")
+         .replace(/[ 　]/g, " ");
+    // 英文には出てこない記号は捨てる（罫線や注釈記号の誤認 : > < | ~ _ * # など）
+    s = s.replace(/[^A-Za-z0-9 .,!?;:'"()\-]/g, " ");
+    s = s.replace(/-{2,}/g, " ").replace(/\.{4,}/g, "...");
+
+    // 対になっていない二重引用符を落とす。
+    // 注釈記号を " と誤認した He doesn't" have ... のようなケース。
+    if(((s.match(/"/g) || []).length % 2) === 1){
+      s = s.replace(/([A-Za-z])"(?=\s|$)/g, "$1");
+    }
+    if(((s.match(/"/g) || []).length % 2) === 1){
+      s = s.replace(/"/g, "");
+    }
+    s = s.replace(/(^|\s)'(?=\s|$)/g, "$1");   // 宙に浮いたアポストロフィ
+
+    // 分断された短縮形をつなぐ: does n't / doesn' t / I 'm
+    s = s.replace(/([A-Za-z])\s+n\s*'\s*t\b/gi, "$1n't");
+    s = s.replace(/([A-Za-z])\s+'\s*(t|s|re|ve|ll|m|d)\b/gi, "$1'$2");
+    s = s.replace(/'\s+(t|s|re|ve|ll|m|d)\b/gi, "'$1");
+
+    // 句読点まわりの空白
+    s = s.replace(/\s+([.,!?;:])/g, "$1");
+    s = s.replace(/([.,!?;:])(?=[A-Za-z])/g, "$1 ");
+    s = s.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+
+    // 行の端に取り残された意味のない1文字（a / A / I / i は残す）
+    s = s.replace(/^\s*[^AaIi\s]\s+/, "");
+    s = s.replace(/\s+[^AaIi.!?"')\s]\s*$/, "");
+
+    return s.replace(/\s+/g, " ").trim();
+  }
+
+  /* ---- 英単語の辞書（読みまちがいの検出と修正に使う） ---- */
+  var DICT = null, dictPromise = null;
+  // 短縮形の語幹など、一般的な単語リストに載らないもの
+  var EXTRA = ["doesn","don","isn","aren","wasn","weren","didn","couldn","wouldn","shouldn",
+               "haven","hasn","hadn","won","ain","o'clock","tv","ok","mom","dad","grandma",
+               "grandpa","math","okay","hi","bye","yeah"];
+
+  function loadDict(){
+    if(dictPromise) return dictPromise;
+    dictPromise = (async function(){
+      var base = "https://cdn.jsdelivr.net/npm/wordlist-english@1.2.1/";
+      var files = ["english-words-10.json","english-words-20.json","english-words-35.json",
+                   "american-words-10.json","american-words-20.json","american-words-35.json"];
+      var set = new Set(), got = 0;
+      for(var i = 0; i < files.length; i++){
+        try{
+          var r = await fetch(base + files[i]);
+          if(!r.ok) continue;
+          var arr = await r.json();
+          if(Array.isArray(arr)){
+            for(var k = 0; k < arr.length; k++) set.add(String(arr[k]).toLowerCase());
+            got++;
+          }
+        }catch(e){}
+      }
+      if(!got) return null;
+      EXTRA.forEach(function(w){ set.add(w); });
+      DICT = set;
+      return set;
+    })();
+    return dictPromise;
+  }
+
+  // 語を辞書で確かめる。大文字を含む語（固有名詞・略語）と数字は対象外。
+  function wordStatus(tok){
+    var core = tok.replace(/^[^A-Za-z0-9']+/, "").replace(/[^A-Za-z0-9']+$/, "");
+    if(!core) return "skip";
+    if(/[A-Z]/.test(core)) return "skip";
+    if(/^[0-9]+$/.test(core)) return "skip";
+    if(!DICT) return "skip";
+    var bits = core.split("'");
+    var base = bits[0], suf = bits[1];
+    if(suf !== undefined && !/^(t|s|re|ve|ll|m|d|clock)?$/.test(suf)) return "bad";
+    if(!base) return "skip";
+    return DICT.has(base) ? "ok" : "bad";
+  }
+
+  // Tesseract が起こしやすい取り違えだけを試し、辞書に当たる候補が
+  // ちょうど1つのときだけ直す。複数該当・該当なしのときは触らない。
+  var CONFUSE = [
+    ["0","o"],["1","l"],["1","i"],["5","s"],["8","b"],["9","g"],["6","b"],["3","e"],["7","t"],["4","a"],
+    ["rn","m"],["cl","d"],["vv","w"],["ii","u"],
+    ["l","i"],["i","l"],["c","e"],["e","c"],["o","a"],["a","o"],["t","f"],["f","t"],["u","v"],["v","u"],["h","b"],["b","h"]
+  ];
+
+  function repairWord(tok){
+    if(!DICT) return tok;
+    var lead = (tok.match(/^[^A-Za-z0-9']+/) || [""])[0];
+    var tail = (tok.match(/[^A-Za-z0-9']+$/) || [""])[0];
+    var core = tok.slice(lead.length, tok.length - tail.length);
+    if(core.length < 3) return tok;
+    if(/[A-Z]/.test(core)) return tok;
+    if(wordStatus(core) !== "bad") return tok;
+
+    var hits = new Set();
+    for(var c = 0; c < CONFUSE.length; c++){
+      var from = CONFUSE[c][0], to = CONFUSE[c][1];
+      var at = core.indexOf(from);
+      while(at !== -1){
+        var cand = core.slice(0, at) + to + core.slice(at + from.length);
+        if(DICT.has(cand.split("'")[0])) hits.add(cand);
+        at = core.indexOf(from, at + 1);
+      }
+    }
+    if(hits.size !== 1) return tok;
+    var fixed = hits.values().next().value;
+    return lead + fixed + tail;
+  }
+
+  function repairLine(s){
+    if(!DICT) return s;
+    return s.split(/(\s+)/).map(function(p){
+      return /^\s*$/.test(p) ? p : repairWord(p);
+    }).join("");
+  }
+
   function looksLikeJunk(s){
     var letters = (s.match(/[A-Za-z]/g) || []).length;
     if(letters < 2) return true;
@@ -691,10 +838,9 @@
     // 1) 掃除
     var lines = [];
     raw.forEach(function(r){
-      var t = String(r.text || "").replace(/\s+/g, " ").trim();
-      t = t.replace(/[|_~^`]+/g, " ").replace(/\s+/g, " ").trim();
-      if(!t) return;
       if(r.conf < 50) return;
+      var t = tidy(r.text);
+      if(!t) return;
       if(looksLikeJunk(t)) return;
       lines.push(t);
     });
@@ -719,7 +865,7 @@
     joined.forEach(function(line){
       var parts = line.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [line];
       parts.forEach(function(p){
-        p = p.trim();
+        p = repairLine(p.trim());
         if(!p || looksLikeJunk(p)) return;
         if(out.length && out[out.length-1].en === p) return;  // 直前と同じなら捨てる
         out.push({ en:p, kind: /\s/.test(p) ? "sentence" : "word" });
@@ -821,6 +967,7 @@
   items = SAMPLE.slice();
   render();
   renderHistory();
+  loadDict().then(function(d){ if(d) render(); }, function(){});
 
   if("serviceWorker" in navigator){
     window.addEventListener("load", function(){
