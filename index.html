@@ -124,14 +124,6 @@
   .prog i{display:block;height:100%;background:var(--blue);width:0;transition:width .25s ease;}
   @media (prefers-reduced-motion: reduce){ .spinner{animation-duration:2.4s} *{scroll-behavior:auto !important} }
 
-  .instr{
-    margin-top:14px;background:var(--blue-wash);border:1px solid var(--blue);
-    border-radius:var(--radius);padding:12px 14px;display:flex;align-items:center;
-    gap:10px;flex-wrap:wrap;
-  }
-  .instr .t{flex:1 1 180px;min-width:0;font-size:13px;color:var(--ink);}
-  .instr .t b{display:block;font-size:11px;color:var(--blue-ink);letter-spacing:.08em;font-weight:700;margin-bottom:2px;}
-
   .sheet{margin-top:18px;}
   .sheet-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px;color:var(--ink-faint);}
   .sheet-head .tag{font-family:var(--font-en);letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--rule-hard);border-radius:999px;padding:3px 9px;white-space:nowrap;}
@@ -216,7 +208,7 @@
   </header>
 
   <section class="capture">
-    <p class="lead">プリントを撮ると、印刷された英文と、その下の日本語を抜き出して読み上げます。</p>
+    <p class="lead">プリントを撮ると、印刷された英文を抜き出し、日本語訳をつけて読み上げます。</p>
     <div class="btns">
       <button class="primary" id="btnCamera">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -256,8 +248,8 @@
       <label for="jaVoice">日本語の声</label>
       <select id="jaVoice"></select>
     </div>
-    <label class="check"><input type="checkbox" id="readJa" checked> 日本語も読み取る</label>
-    <p class="note">日本語の読み取りには、はじめの1回だけ約1.5MBの追加データが要ります。切ると英語だけを読み取り、少し速くなります。</p>
+    <label class="check"><input type="checkbox" id="translate" checked> 日本語訳をつける</label>
+    <p class="note">訳は Google の翻訳サービスで作ります。送られるのは<b>読み取った英文だけ</b>で、写真は送られません。一度訳した英文は端末に保存し、次からは送りません。切ると英語だけになります。</p>
   </section>
 
   <section class="panel" id="history" hidden>
@@ -279,11 +271,6 @@
       <div class="prog" id="statusProg" hidden><i id="statusBar"></i></div>
     </div>
     <button class="ghost" id="statusAction" hidden></button>
-  </div>
-
-  <div class="instr" id="instr" hidden>
-    <div class="t"><b>プリントの指示</b><span id="instrText"></span></div>
-    <button class="ghost" id="instrApply" hidden></button>
   </div>
 
   <section class="sheet">
@@ -339,7 +326,6 @@
 
   /* ================= state ================= */
   var items = [];
-  var instructions = [];
   var playing = false, singleMode = false, cursor = -1, loopLeft = 0;
   var fixMode = false;
   var objUrl = null;
@@ -348,7 +334,7 @@
   var spokenMs = 0;   // まねする間の長さを決めるため、その行の英語の所要時間を覚える
 
   var prefs = { rate:0.85, repeat:1, voice:"", jaVoice:"", mode:"whole",
-                practice:"en", order:"en", readJa:true };
+                practice:"en", order:"ja", translate:true, v:2 };
 
   var SAMPLE = [
     { en:"Read the passage and answer the questions.", ja:"文章を読んで、質問に答えましょう。", kind:"heading" },
@@ -360,8 +346,13 @@
   ];
 
   function loadPrefs(){
-    try{ var r = localStorage.getItem("ondoku-prefs");
-      if(r){ var p = JSON.parse(r); for(var k in prefs) if(p[k] !== undefined) prefs[k] = p[k]; }
+    try{
+      var r = localStorage.getItem("ondoku-prefs");
+      if(!r) return;
+      var p = JSON.parse(r);
+      for(var k in prefs) if(p[k] !== undefined) prefs[k] = p[k];
+      // 読む順の既定を「日本語 → 英語」に変えたぶんを、保存済みの設定にも反映する
+      if(!p.v || p.v < 2){ prefs.order = "ja"; prefs.v = 2; savePrefs(); }
     }catch(e){}
   }
   function savePrefs(){ try{ localStorage.setItem("ondoku-prefs", JSON.stringify(prefs)); }catch(e){} }
@@ -402,8 +393,6 @@
       s2.textContent = (rec.items[0] && rec.items[0].en) || "";
       b.appendChild(s1); b.appendChild(s2);
       b.addEventListener("click", function(){
-        instructions = [];
-        renderInstructions();
         setSheet(rec.items.slice(), "きろく", false);
         $("history").hidden = true;
         $("btnHistory").setAttribute("aria-pressed","false");
@@ -776,45 +765,6 @@
     render();
   }
 
-  /* ================= プリントの指示 ================= */
-  var INSTR_RE = /(回目|聞きましょう|言いましょう|読みましょう|まねして|なぞりましょう|書きましょう|練習しましょう)/;
-
-  function instructionMode(s){
-    if(/日本語と英語|英語と日本語/.test(s)) return "enja";
-    if(/まねして|リピート/.test(s)) return "repeat";
-    if(/英語を?\s*聞/.test(s)) return "en";
-    if(/言いましょう/.test(s)) return "repeat";
-    return null;
-  }
-  var MODE_LABEL = { en:"英語を聞く", enja:"英語と日本語を聞く", repeat:"まねして言う" };
-
-  function renderInstructions(){
-    var box = $("instr");
-    if(!instructions.length){ box.hidden = true; return; }
-    box.hidden = false;
-    $("instrText").textContent = instructions.join("　/　");
-
-    var want = null;
-    for(var i = 0; i < instructions.length; i++){
-      var m = instructionMode(instructions[i]);
-      if(m){ want = m; break; }
-    }
-    var btn = $("instrApply");
-    if(want && want !== prefs.practice && !(want === "enja" && !jaVoices.length)){
-      btn.hidden = false;
-      btn.textContent = "「" + MODE_LABEL[want] + "」にする";
-      btn.onclick = function(){
-        prefs.practice = want;
-        $("practice").value = want;
-        savePrefs();
-        renderInstructions();
-      };
-    } else {
-      btn.hidden = true;
-      btn.onclick = null;
-    }
-  }
-
   /* ================= status ================= */
   function showStatus(title, note, opts){
     opts = opts || {};
@@ -920,29 +870,6 @@
     return s.replace(/\s+/g, " ").trim();
   }
 
-  /* ================= 日本語の掃除 ================= */
-  var JA_CHARS = "぀-ゟ゠-ヿ一-鿿ー";
-  var JA_RE = new RegExp("[" + JA_CHARS + "]", "g");
-
-  function isJa(s){
-    var m = String(s).match(JA_RE);
-    var jp = m ? m.length : 0;
-    var solid = String(s).replace(/\s/g, "").length;
-    return jp >= 2 && solid > 0 && (jp / solid) >= 0.3;
-  }
-
-  function tidyJa(s){
-    s = String(s).replace(/　/g, " ");
-    s = s.replace(/[|~^_*#<>\\{}\[\]@+=]/g, "");
-    // Tesseract が日本語の字間に入れる空白を詰める（重なり対策で数回まわす）
-    var gap = new RegExp("([" + JA_CHARS + "、。])\\s+([" + JA_CHARS + "、。])", "g");
-    for(var i = 0; i < 4; i++) s = s.replace(gap, "$1$2");
-    s = s.replace(/\s*[:：]\s*/g, "：");
-    // 行末に紛れこんだ教材番号（E 31a など）を落とす
-    s = s.replace(/\s*[A-Z]{1,2}\s?[0-9]{1,3}\s?[ab]?\s*$/, "");
-    return s.replace(/\s+/g, " ").trim();
-  }
-
   /* ================= 英単語の辞書 ================= */
   var DICT = null, dictPromise = null;
   var EXTRA = ["doesn","don","isn","aren","wasn","weren","didn","couldn","wouldn","shouldn",
@@ -1024,6 +951,23 @@
     }).join("");
   }
 
+  // プリント上の日本語を英語として誤読した行を落とす。
+  // 英単語として通る語が1つも無ければ、それは英文ではない。
+  function notEnglish(s){
+    if(!DICT) return false;
+    var toks = String(s).split(/\s+/).filter(function(t){ return /[A-Za-z]/.test(t); });
+    if(toks.length < 2) return false;
+    var ok = 0;
+    toks.forEach(function(t){
+      var core = t.replace(/^[^A-Za-z']+/, "").replace(/[^A-Za-z']+$/, "");
+      if(!core) return;
+      if(DICT.has(core.toLowerCase().split("'")[0])){ ok++; return; }
+      if(/^[A-Z][a-z]+$/.test(core) && /[aeiou]/i.test(core)){ ok++; return; }  // Ken などの人名
+      if(/^[A-Z]{1,3}$/.test(core)){ ok++; return; }                            // TV などの略語
+    });
+    return (ok / toks.length) < 0.34;
+  }
+
   function looksLikeJunk(s){
     var letters = (s.match(/[A-Za-z]/g) || []).length;
     if(letters < 2) return true;
@@ -1033,6 +977,101 @@
     if(/^[A-Z]{1,2}\s?\d{1,3}\s?[ab]?$/.test(s)) return true;
     if(/^(kumon|name|date)$/i.test(s)) return true;
     return false;
+  }
+
+  /* ================= 日本語訳 ================= */
+  // 訳は Google の翻訳サービスで作る。送るのは読み取った英文だけ。
+  // 一度訳したものは端末に保存し、同じ英文は二度と送らない。
+  var TR_KEY = "ondoku-tr";
+  var trCache = null;
+
+  function trLoad(){
+    if(trCache) return trCache;
+    try{ trCache = JSON.parse(localStorage.getItem(TR_KEY) || "{}") || {}; }
+    catch(e){ trCache = {}; }
+    return trCache;
+  }
+  function trSave(){
+    try{
+      var c = trLoad(), keys = Object.keys(c);
+      if(keys.length > 600){
+        var trimmed = {};
+        keys.slice(keys.length - 600).forEach(function(k){ trimmed[k] = c[k]; });
+        trCache = c = trimmed;
+      }
+      localStorage.setItem(TR_KEY, JSON.stringify(c));
+    }catch(e){}
+  }
+
+  // 改行でつないで1回で送り、返ってきた原文で対応づける（順番だけに頼らない）
+  function trFetch(batch){
+    var url = "https://translate.googleapis.com/translate_a/single?" +
+      new URLSearchParams({ client:"gtx", sl:"en", tl:"ja", dt:"t", q:batch.join("\n") }).toString();
+    var ctl = new AbortController();
+    var timer = setTimeout(function(){ ctl.abort(); }, 15000);
+    return fetch(url, { signal: ctl.signal }).then(function(r){
+      if(!r.ok) throw new Error("http " + r.status);
+      return r.json();
+    }).then(function(j){
+      clearTimeout(timer);
+      var segs = (j && j[0]) || [];
+      var bySrc = {}, order = [];
+      segs.forEach(function(seg){
+        if(!seg) return;
+        var dst = String(seg[0] == null ? "" : seg[0]).replace(/\n/g, "").trim();
+        var src = String(seg[1] == null ? "" : seg[1]).replace(/\n/g, "").trim();
+        order.push(dst);
+        if(src) bySrc[src] = dst;
+      });
+      return batch.map(function(en, i){
+        var hit = bySrc[en.trim()];
+        if(hit !== undefined) return hit;
+        return order.length === batch.length ? order[i] : "";
+      });
+    }, function(e){ clearTimeout(timer); throw e; });
+  }
+
+  async function translateAll(list, onProgress){
+    var cache = trLoad();
+    var todo = [], idx = [];
+    list.forEach(function(it, i){
+      var key = String(it.en || "").trim();
+      if(!key) return;
+      if(cache[key] !== undefined){ it.ja = cache[key]; return; }
+      todo.push(key); idx.push(i);
+    });
+    if(!todo.length) return { done:0, failed:0 };
+
+    // URL が長くなりすぎないよう、文字数と件数で区切る
+    var batches = [], cur = [], len = 0;
+    todo.forEach(function(t){
+      if(cur.length && (len + t.length > 1100 || cur.length >= 12)){ batches.push(cur); cur = []; len = 0; }
+      cur.push(t); len += t.length + 1;
+    });
+    if(cur.length) batches.push(cur);
+
+    var done = 0, failed = 0, at = 0;
+    for(var b = 0; b < batches.length; b++){
+      var batch = batches[b];
+      try{
+        var res = await trFetch(batch);
+        for(var k = 0; k < batch.length; k++){
+          var ja = res[k] || "";
+          if(ja){
+            cache[batch[k]] = ja;
+            done++;
+            if(list[idx[at + k]]) list[idx[at + k]].ja = ja;
+          } else failed++;
+        }
+      }catch(e){
+        failed += batch.length;
+        if(window.console) console.warn("翻訳に失敗:", e);
+      }
+      at += batch.length;
+      if(onProgress) onProgress((b + 1) / batches.length);
+    }
+    trSave();
+    return { done:done, failed:failed };
   }
 
   /* ================= OCR ================= */
@@ -1049,17 +1088,13 @@
     if(workerPromise[lang]) return workerPromise[lang];
     workerPromise[lang] = (async function(){
       if(typeof Tesseract === "undefined") throw new Error("no-tesseract");
-      var opts = {
+      var w = await Tesseract.createWorker(lang, 1, {
         logger: function(m){
           var label = STAGE[m.status] || "処理中";
-          if(lang === "jpn") label = "日本語の" + label;
           var p = (typeof m.progress === "number") ? m.progress : 0;
           showStatus(label + "…", "はじめの1回だけ、少し時間がかかります。", { busy:true, progress:p });
         }
-      };
-      // 日本語は軽い方のデータを使う（約1.5MB）。英語は既定のまま。
-      if(lang === "jpn") opts.langPath = "https://tessdata.projectnaptha.com/4.0.0_fast";
-      var w = await Tesseract.createWorker(lang, 1, opts);
+      });
       workers[lang] = w;
       return w;
     })();
@@ -1107,7 +1142,7 @@
       if(r.conf < 50) return;
       var t = tidy(r.text);
       if(!t) return;
-      if(looksLikeJunk(t)) return;
+      if(looksLikeJunk(t) || notEnglish(t)) return;
       lines.push({ text:t, bbox:r.bbox });
     });
 
@@ -1131,7 +1166,7 @@
       var parts = line.text.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [line.text];
       parts.forEach(function(p){
         p = repairLine(p.trim());
-        if(!p || looksLikeJunk(p)) return;
+        if(!p || looksLikeJunk(p) || notEnglish(p)) return;
         if(out.length && out[out.length-1].en === p) return;
         out.push({ en:p, ja:"", kind: /\s/.test(p) ? "sentence" : "word", bbox: line.bbox });
       });
@@ -1139,50 +1174,11 @@
     return out.slice(0, 120);
   }
 
-  // 日本語の認識結果から、日本語の行だけを拾う
-  function collectJa(raw){
-    var out = [];
-    raw.forEach(function(r){
-      if(r.conf < 45) return;
-      var t = tidyJa(r.text);
-      if(!t || !isJa(t)) return;
-      out.push({ text:t, bbox:r.bbox });
-    });
-    return out;
-  }
-
-  // 英文の真下にある日本語を、その訳として結びつける。
-  // 結びつかなかったもののうち、指示文らしいものだけを指示として返す。
-  function attachJa(list, jaLines){
-    var notes = [];
-    jaLines.forEach(function(j){
-      if(!j.bbox){ notes.push(j.text); return; }
-      var jh = Math.max(1, j.bbox.y1 - j.bbox.y0);
-      var best = null, bestGap = Infinity;
-
-      list.forEach(function(it){
-        if(!it.bbox) return;
-        var gap = j.bbox.y0 - it.bbox.y1;
-        if(gap < -jh * 0.5) return;                        // 英文より上にある
-        if(gap > jh * 2.5) return;                         // 離れすぎ
-        var overlap = Math.min(it.bbox.x1, j.bbox.x1) - Math.max(it.bbox.x0, j.bbox.x0);
-        var narrow = Math.min(it.bbox.x1 - it.bbox.x0, j.bbox.x1 - j.bbox.x0);
-        if(narrow <= 0 || overlap / narrow < 0.2) return;  // 横方向に重なっていない
-        if(gap < bestGap){ bestGap = gap; best = it; }
-      });
-
-      if(best) best.ja = best.ja ? (best.ja + j.text) : j.text;
-      else notes.push(j.text);
-    });
-    return notes.filter(function(t){ return INSTR_RE.test(t); });
-  }
-
   async function readPhoto(file){
     if(busy) return;
     busy = true;
     stopAll();
-    instructions = [];
-    renderInstructions();
+    var trWarn = false;
     try{
       showStatus("写真を準備しています…", "", { busy:true, progress:0 });
       var canvas = await prepare(file);
@@ -1194,24 +1190,24 @@
       try{ await loadDict(); }catch(e){}
       var list = cleanUp(extractLines(engRes && engRes.data));
 
-      if(prefs.readJa){
-        try{
-          var jpnWorker = await getWorker("jpn");
-          showStatus("日本語を読み取っています…", "", { busy:true, progress:0 });
-          var jpnRes = await jpnWorker.recognize(canvas, {}, { text:true, blocks:true });
-          instructions = attachJa(list, collectJa(extractLines(jpnRes && jpnRes.data)));
-        }catch(e){
-          if(window.console) console.warn("日本語の読み取りに失敗:", e);
-        }
-      }
-
       if(!list.length){
         showStatus("英文が見つかりませんでした", "明るい場所で、プリントが画面いっぱいに写るように撮りなおしてください。", { error:true });
         return;
       }
+
+      if(prefs.translate){
+        showStatus("日本語訳をつけています…", "", { busy:true, progress:0 });
+        var tr = await translateAll(list, function(p){
+          showStatus("日本語訳をつけています…", "", { busy:true, progress:p });
+        });
+        trWarn = tr.failed > 0 && tr.done === 0;
+      }
+
       hideStatus();
-      renderInstructions();
       setSheet(list, "このプリント", true);
+      if(trWarn){
+        showStatus("日本語訳をつけられませんでした", "通信できないときは英語だけになります。「なおす」で手で入れられます。", { error:true });
+      }
     }catch(err){
       var msg = (err && err.message) || "";
       if(msg === "no-tesseract"){
@@ -1248,7 +1244,7 @@
   $("mode").value = prefs.mode;
   $("practice").value = prefs.practice;
   $("order").value = prefs.order;
-  $("readJa").checked = !!prefs.readJa;
+  $("translate").checked = !!prefs.translate;
 
   $("rate").addEventListener("input", function(){
     prefs.rate = parseFloat(this.value);
@@ -1265,10 +1261,9 @@
   $("practice").addEventListener("change", function(){
     prefs.practice = this.value; savePrefs();
     if(playing){ stopSpeaking(); step(); }
-    renderInstructions();
   });
   $("order").addEventListener("change", function(){ prefs.order = this.value; savePrefs(); });
-  $("readJa").addEventListener("change", function(){ prefs.readJa = this.checked; savePrefs(); });
+  $("translate").addEventListener("change", function(){ prefs.translate = this.checked; savePrefs(); });
   $("voice").addEventListener("change", function(){
     enVoice = enVoices[parseInt(this.value, 10)] || null;
     prefs.voice = enVoice ? enVoice.name : ""; savePrefs();
@@ -1300,11 +1295,16 @@
     $("btnManual").hidden = true;
     try{ $("manualText").focus({ preventScroll:true }); }catch(e){}
   });
-  $("btnManualGo").addEventListener("click", function(){
+  $("btnManualGo").addEventListener("click", async function(){
     var list = parseManual($("manualText").value || "");
     if(!list.length){ showStatus("英文が入力されていません", "1行に1文ずつ入れてください。", { error:true }); return; }
+    if(prefs.translate){
+      showStatus("日本語訳をつけています…", "", { busy:true, progress:0 });
+      await translateAll(list, function(p){
+        showStatus("日本語訳をつけています…", "", { busy:true, progress:p });
+      });
+    }
     hideStatus();
-    instructions = []; renderInstructions();
     setSheet(list, "入力した英文", true);
   });
 
@@ -1353,9 +1353,8 @@
 
   // ローカル検証用の入口（通常の利用では使いません）
   window.__ondoku = {
-    readPhoto: readPhoto, cleanUp: cleanUp, collectJa: collectJa, attachJa: attachJa,
-    tidyJa: tidyJa, isJa: isJa, instructionMode: instructionMode, buildSequence: buildSequence,
-    extractLines: extractLines,
+    readPhoto: readPhoto, cleanUp: cleanUp, buildSequence: buildSequence,
+    extractLines: extractLines, translateAll: translateAll, trFetch: trFetch,
     getItems: function(){ return items; },
     setItems: function(l){ setSheet(l, "テスト", false); },
     getPrefs: function(){ return prefs; }
