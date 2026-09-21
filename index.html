@@ -99,6 +99,11 @@
   .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft);}
   .check input{width:18px;height:18px;accent-color:var(--blue);}
   .note{font-size:12px;color:var(--ink-faint);line-height:1.6;margin:0;}
+  .diag{
+    margin:0;padding:10px 12px;background:var(--card-2);border:1px solid var(--rule);
+    border-radius:10px;font-size:12px;line-height:1.8;white-space:pre-wrap;
+    word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink-soft);
+  }
 
   ul.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
   ul.hist li{display:flex;align-items:center;gap:10px;}
@@ -249,6 +254,8 @@
       <select id="jaVoice"></select>
     </div>
     <label class="check"><input type="checkbox" id="translate" checked> 日本語訳をつける</label>
+    <button class="secondary" id="btnDiag">翻訳の通信を調べる</button>
+    <pre class="diag" id="diagOut" hidden></pre>
     <p class="note">訳は Google の翻訳サービスで作ります。送られるのは<b>読み取った英文だけ</b>で、写真は送られません。一度訳した英文は端末に保存し、次からは送りません。切ると英語だけになります。</p>
   </section>
 
@@ -1059,10 +1066,11 @@
   }
 
   /* ================= 日本語訳 ================= */
-  // 訳は Google の翻訳サービスで作る。送るのは読み取った英文だけ。
-  // 一度訳したものは端末に保存し、同じ英文は二度と送らない。
+  // 送るのは読み取った英文だけ。一度訳したものは端末に保存し、同じ英文は二度と送らない。
+  // 経路がひとつ塞がれても訳がつくよう、翻訳先を2つ用意している。
   var TR_KEY = "ondoku-tr";
   var trCache = null;
+  var trLastError = "";
 
   function trLoad(){
     if(trCache) return trCache;
@@ -1081,27 +1089,27 @@
       localStorage.setItem(TR_KEY, JSON.stringify(c));
     }catch(e){}
   }
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 
-  var trLastError = "";
-
-  function trRequest(q){
-    var url = "https://translate.googleapis.com/translate_a/single?" +
-      new URLSearchParams({ client:"gtx", sl:"en", tl:"ja", dt:"t", q:q }).toString();
+  function trGet(url, parse){
     var ctl = new AbortController();
     var timer = setTimeout(function(){ ctl.abort(); }, 15000);
-    return fetch(url, { signal: ctl.signal }).then(function(r){
+    return fetch(url, { signal: ctl.signal, mode:"cors", credentials:"omit" }).then(function(r){
       clearTimeout(timer);
       if(!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
     }, function(e){
       clearTimeout(timer);
-      var name = e && e.name;
-      throw new Error(name === "AbortError" ? "時間切れ" : ((e && e.message) || "通信できません"));
-    });
+      throw new Error((e && e.name === "AbortError") ? "時間切れ" : ((e && e.message) || "通信できません"));
+    }).then(parse);
   }
 
-  // 返ってきた訳を、原文と並び順の両方から引けるようにする
-  function trSegments(j){
+  /* --- 翻訳先 1: Google --- */
+  function gUrl(q){
+    return "https://translate.googleapis.com/translate_a/single?" +
+      new URLSearchParams({ client:"gtx", sl:"en", tl:"ja", dt:"t", q:q }).toString();
+  }
+  function gSegments(j){
     var segs = (j && j[0]) || [];
     var bySrc = {}, order = [];
     segs.forEach(function(seg){
@@ -1113,42 +1121,108 @@
     });
     return { bySrc:bySrc, order:order };
   }
+  function trGoogleOne(q){
+    return trGet(gUrl(q), function(j){ return gSegments(j).order.join("").trim(); });
+  }
+  // まとめ送りは URL に改行（%0A）が入る。これを弾く経路があるため、失敗しても1文ずつに切り替える。
+  function trGoogleBatch(lines){
+    return trGet(gUrl(lines.join("\n")), function(j){
+      var m = gSegments(j);
+      return lines.map(function(t, i){
+        var hit = m.bySrc[t.trim()];
+        if(hit) return hit;
+        return (m.order.length === lines.length && m.order[i]) ? m.order[i] : "";
+      });
+    });
+  }
 
-  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  /* --- 翻訳先 2: MyMemory --- */
+  // 翻訳メモリの寄せ集めを返すことがあり、そのままだと無関係な訳が混じる。
+  // 機械翻訳の結果だけを取り出して使う。
+  function trMyMemoryOne(q){
+    var url = "https://api.mymemory.translated.net/get?" +
+      new URLSearchParams({ q:q, langpair:"en|ja" }).toString();
+    return trGet(url, function(d){
+      if(d && d.responseStatus && Number(d.responseStatus) !== 200){
+        throw new Error("応答 " + d.responseStatus);
+      }
+      var ms = (d && d.matches) || [];
+      for(var i = 0; i < ms.length; i++){
+        var by = String(ms[i]["created-by"] || "");
+        if((String(ms[i].id) === "0" || by.indexOf("MT") !== -1) && ms[i].translation){
+          return String(ms[i].translation).trim();
+        }
+      }
+      return String(((d || {}).responseData || {}).translatedText || "").trim();
+    });
+  }
 
-  // 改行でつないで1回で送る。翻訳側は文単位で区切るので、行と1対1に
-  // ならないことがある。取りこぼした行だけ1行ずつ送り直す。
+  // 1かたまりを訳す。まとめ送り → 1文ずつ → 別の翻訳先、の順に手を変える。
   async function trBatch(batch){
-    var out = [];
-    for(var n = 0; n < batch.length; n++) out.push("");
-    var batchOk = false;
+    var out = batch.map(function(){ return ""; });
+    var googleOk = true, i, k;
 
     try{
-      var m = trSegments(await trRequest(batch.join("\n")));
-      batchOk = true;
-      for(var i = 0; i < batch.length; i++){
-        var hit = m.bySrc[batch[i].trim()];
-        if(hit) out[i] = hit;
-        else if(m.order.length === batch.length && m.order[i]) out[i] = m.order[i];
-      }
+      var res = await trGoogleBatch(batch);
+      for(i = 0; i < batch.length; i++) out[i] = res[i] || "";
     }catch(e){
-      trLastError = e.message || "通信できません";
+      trLastError = "Google: " + e.message;
+      googleOk = false;
     }
 
-    // まとめ送りが通ったのに取りこぼした行だけ、個別に送り直す。
-    // 通信自体が駄目だったときは、同じ失敗を繰り返さない。
-    if(batchOk){
-      for(var k = 0; k < batch.length; k++){
+    // まとめ送りだけが弾かれている可能性があるので、1文で試し直す
+    if(!googleOk){
+      try{
+        out[0] = await trGoogleOne(batch[0]);
+        googleOk = true;
+      }catch(e2){ trLastError = "Google: " + e2.message; }
+    }
+
+    if(googleOk){
+      for(k = 0; k < batch.length; k++){
         if(out[k]) continue;
         try{
-          await sleep(200);
-          out[k] = trSegments(await trRequest(batch[k])).order.join("").trim();
-        }catch(e2){
-          trLastError = e2.message || "通信できません";
+          await sleep(180);
+          out[k] = await trGoogleOne(batch[k]);
+        }catch(e3){
+          trLastError = "Google: " + e3.message;
+          break;   // 続けても同じ失敗になる
         }
       }
     }
+
+    // ここまでで埋まらなかったぶんは、別の翻訳先へ
+    for(k = 0; k < batch.length; k++){
+      if(out[k]) continue;
+      try{
+        await sleep(180);
+        out[k] = await trMyMemoryOne(batch[k]);
+      }catch(e4){
+        trLastError = trLastError + " / MyMemory: " + e4.message;
+        break;
+      }
+    }
     return out;
+  }
+
+  // どの経路が通ってどれが弾かれているかを、端末自身に調べさせる
+  async function trDiagnose(){
+    var lines = [];
+    async function probe(label, fn){
+      var t0 = Date.now();
+      try{
+        var v = await fn();
+        lines.push("○ " + label + " … " + (v ? String(v).slice(0, 18) : "(空の応答)") + "  " + (Date.now() - t0) + "ms");
+      }catch(e){
+        lines.push("× " + label + " … " + (e.message || "失敗"));
+      }
+    }
+    await probe("Google 1文", function(){ return trGoogleOne("This is a pen."); });
+    await probe("Google まとめ送り", function(){
+      return trGoogleBatch(["This is a pen.", "I have a dog."]).then(function(a){ return a.join(" / "); });
+    });
+    await probe("MyMemory 1文", function(){ return trMyMemoryOne("This is a pen."); });
+    return lines;
   }
 
   async function translateAll(list, onProgress){
@@ -1423,6 +1497,18 @@
     if(togglePanel("history","btnHistory")) renderHistory();
   });
   $("btnSettings").addEventListener("click", function(){ togglePanel("settings","btnSettings"); });
+  $("btnDiag").addEventListener("click", async function(){
+    var out = $("diagOut");
+    this.disabled = true;
+    out.hidden = false;
+    out.textContent = "調べています…";
+    try{
+      out.textContent = (await trDiagnose()).join("\n");
+    }catch(e){
+      out.textContent = "調べられませんでした: " + ((e && e.message) || "");
+    }
+    this.disabled = false;
+  });
   $("btnClearHist").addEventListener("click", function(){
     try{ localStorage.removeItem("ondoku-history"); }catch(e){}
     renderHistory();
@@ -1460,6 +1546,7 @@
   window.__ondoku = {
     readPhoto: readPhoto, cleanUp: cleanUp, buildSequence: buildSequence,
     extractLines: extractLines, translateAll: translateAll, trBatch: trBatch,
+    trDiagnose: trDiagnose, trGoogleOne: trGoogleOne, trMyMemoryOne: trMyMemoryOne,
     setFixMode: setFixMode, getHistory: getHistory,
     getItems: function(){ return items; },
     setItems: function(l){ setSheet(l, "テスト", false); },
