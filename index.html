@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>おんどくカメラ</title>
-<meta name="description" content="英語のプリントをカメラで撮ると、英文を抜き出して読み上げます。">
+<meta name="description" content="英語のプリントをカメラで撮ると、英文と日本語訳を抜き出して読み上げます。">
 <meta name="theme-color" content="#f6f3ec" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#12161d" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
@@ -47,16 +47,17 @@
   body{
     margin:0; background:var(--paper); color:var(--ink);
     font-family:var(--font-jp); font-size:15px; line-height:1.6;
-    padding-inline:16px; padding-bottom:190px;
+    padding-inline:16px; padding-bottom:200px;
     -webkit-text-size-adjust:100%; -webkit-tap-highlight-color:transparent;
   }
   img{max-width:100%;}
   [hidden]{display:none !important;}
   .wrap{max-width:620px;margin:0 auto;}
 
-  .bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-block:18px 14px;}
-  .bar h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.02em;}
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-block:18px 14px;}
+  .bar h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.02em;flex:1;}
   .bar h1 .dot{color:var(--red);}
+  .bar .tools{display:flex;gap:7px;}
 
   button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer;}
   button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,li:focus-visible{
@@ -93,6 +94,12 @@
     background:var(--card-2);color:var(--ink);
     border:1px solid var(--rule-hard);border-radius:10px;padding:10px 12px;
   }
+  .row{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;}
+  .row > label{font-size:13px;color:var(--ink-soft);}
+  .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft);}
+  .check input{width:18px;height:18px;accent-color:var(--blue);}
+  .note{font-size:12px;color:var(--ink-faint);line-height:1.6;margin:0;}
+
   ul.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
   ul.hist li{display:flex;align-items:center;gap:10px;}
   ul.hist button{
@@ -116,6 +123,14 @@
   .prog{height:4px;background:var(--blue-wash);border-radius:99px;overflow:hidden;margin-top:7px;}
   .prog i{display:block;height:100%;background:var(--blue);width:0;transition:width .25s ease;}
   @media (prefers-reduced-motion: reduce){ .spinner{animation-duration:2.4s} *{scroll-behavior:auto !important} }
+
+  .instr{
+    margin-top:14px;background:var(--blue-wash);border:1px solid var(--blue);
+    border-radius:var(--radius);padding:12px 14px;display:flex;align-items:center;
+    gap:10px;flex-wrap:wrap;
+  }
+  .instr .t{flex:1 1 180px;min-width:0;font-size:13px;color:var(--ink);}
+  .instr .t b{display:block;font-size:11px;color:var(--blue-ink);letter-spacing:.08em;font-weight:700;margin-bottom:2px;}
 
   .sheet{margin-top:18px;}
   .sheet-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px;color:var(--ink-faint);}
@@ -145,6 +160,12 @@
     text-decoration:underline dotted var(--red);
     text-decoration-thickness:2px; text-underline-offset:4px;
   }
+  li.line .ja{margin-top:6px;font-size:13.5px;color:var(--ink-soft);line-height:1.65;}
+  li.line .ja.say{color:var(--red);font-weight:500;}
+  li.line .cue{margin-top:9px;display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:var(--red);}
+  li.line .cue i{width:9px;height:9px;border-radius:50%;background:var(--red);animation:pulse 1s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.25;transform:scale(.75)}50%{opacity:1;transform:scale(1.15)}}
+  @media (prefers-reduced-motion: reduce){ li.line .cue i{animation:none;opacity:.9} }
   li.line .spk{flex:none;align-self:center;width:38px;height:38px;border-radius:50%;border:1px solid var(--rule);background:var(--card-2);display:grid;place-items:center;color:var(--blue-ink);}
   li.line.word .en{font-size:22px;font-weight:600;}
   li.line.heading .en{font-size:15px;font-weight:600;color:var(--ink-soft);}
@@ -152,10 +173,12 @@
   li.line.now .en{background-size:100% 2px;}
   li.line.now .spk{border-color:var(--red);color:var(--red);background:var(--card);}
   li.line.now .no{color:var(--red);font-weight:600;}
+  li.line.waiting{border-style:dashed;}
   li.line .edit{
     width:100%;font-family:var(--font-en);font-size:18px;line-height:1.4;
     background:var(--card-2);color:var(--ink);border:1px solid var(--blue);border-radius:9px;padding:8px 10px;
   }
+  li.line .edit.jaedit{font-family:var(--font-jp);font-size:15px;margin-top:6px;}
   li.line .del{flex:none;align-self:center;width:34px;height:34px;border-radius:50%;border:1px solid var(--rule);background:var(--card-2);color:var(--red);display:grid;place-items:center;font-size:17px;line-height:1;}
   .empty{text-align:center;color:var(--ink-faint);font-size:14px;border:1px dashed var(--rule-hard);border-radius:var(--radius);padding:28px 16px;}
 
@@ -169,12 +192,13 @@
   .play.stopping{background:var(--red);}
   .play:disabled{opacity:.45;box-shadow:none;}
   .play .pos{font-family:var(--font-en);font-variant-numeric:tabular-nums;font-weight:500;opacity:.85;font-size:14px;}
-  .controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-  .ctl{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-soft);}
-  .ctl.speed{flex:1 1 150px;min-width:140px;}
+  .controls{display:flex;align-items:center;gap:10px;}
+  .ctl{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-soft);min-width:0;}
+  .ctl.grow{flex:1;min-width:0;}
   .ctl label{white-space:nowrap;}
   input[type="range"]{flex:1;min-width:70px;accent-color:var(--blue);height:24px;}
-  select{font-family:inherit;font-size:13px;background:var(--card);color:var(--ink);border:1px solid var(--rule-hard);border-radius:8px;padding:5px 7px;max-width:130px;}
+  select{font-family:inherit;font-size:13px;background:var(--card);color:var(--ink);border:1px solid var(--rule-hard);border-radius:8px;padding:6px 7px;max-width:100%;min-width:0;}
+  select.wide{flex:1;}
   .hint{font-size:12px;color:var(--ink-faint);text-align:center;margin:14px 0 0;}
   .hint.quiet{margin-top:8px;opacity:.85;line-height:1.7;}
   svg{display:block;}
@@ -185,11 +209,14 @@
 <div class="wrap">
   <header class="bar">
     <h1>おんどくカメラ<span class="dot">.</span></h1>
-    <button class="ghost" id="btnHistory" aria-pressed="false">きろく</button>
+    <div class="tools">
+      <button class="ghost" id="btnHistory" aria-pressed="false">きろく</button>
+      <button class="ghost" id="btnSettings" aria-pressed="false">設定</button>
+    </div>
   </header>
 
   <section class="capture">
-    <p class="lead">プリントを撮ると、印刷された英文だけを抜き出して読み上げます。</p>
+    <p class="lead">プリントを撮ると、印刷された英文と、その下の日本語を抜き出して読み上げます。</p>
     <div class="btns">
       <button class="primary" id="btnCamera">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -198,6 +225,39 @@
       <button class="secondary" id="btnLibrary">写真から選ぶ</button>
     </div>
     <button class="linky" id="btnManual">キーボードで英文を入れる</button>
+  </section>
+
+  <section class="panel" id="settings" hidden>
+    <h2>設定</h2>
+    <div class="row">
+      <label for="mode">読み方</label>
+      <select id="mode">
+        <option value="whole">ふつう（1文まとめて）</option>
+        <option value="chunk">くぎって</option>
+        <option value="word">1語ずつ</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="repeat">くりかえし</label>
+      <select id="repeat"><option value="1">1回</option><option value="2">2回</option><option value="3">3回</option></select>
+    </div>
+    <div class="row">
+      <label for="order">英語と日本語の順</label>
+      <select id="order">
+        <option value="en">英語 → 日本語</option>
+        <option value="ja">日本語 → 英語</option>
+      </select>
+    </div>
+    <div class="row" id="voiceRow">
+      <label for="voice">英語の声</label>
+      <select id="voice"></select>
+    </div>
+    <div class="row" id="jaVoiceRow" hidden>
+      <label for="jaVoice">日本語の声</label>
+      <select id="jaVoice"></select>
+    </div>
+    <label class="check"><input type="checkbox" id="readJa" checked> 日本語も読み取る</label>
+    <p class="note">日本語の読み取りには、はじめの1回だけ約1.5MBの追加データが要ります。切ると英語だけを読み取り、少し速くなります。</p>
   </section>
 
   <section class="panel" id="history" hidden>
@@ -221,6 +281,11 @@
     <button class="ghost" id="statusAction" hidden></button>
   </div>
 
+  <div class="instr" id="instr" hidden>
+    <div class="t"><b>プリントの指示</b><span id="instrText"></span></div>
+    <button class="ghost" id="instrApply" hidden></button>
+  </div>
+
   <section class="sheet">
     <div class="sheet-head">
       <img class="thumb" id="thumb" alt="" hidden>
@@ -233,11 +298,6 @@
 
   <p class="hint" id="hint">英文をタップすると、その1行だけをくりかえします。点線の語は読みまちがいかもしれません。</p>
   <p class="hint quiet">音が出ないときは、マナーモード（本体の消音スイッチ）を解除してください。<br>スピーカーだけ鳴らない場合は、Bluetooth の接続が残っていないかも確かめてください。</p>
-
-  <div class="ctl" id="voiceWrap" style="justify-content:center;margin-top:10px" hidden>
-    <label for="voice">声</label>
-    <select id="voice"></select>
-  </div>
 </div>
 
 <div class="dock">
@@ -248,24 +308,22 @@
       <span class="pos" id="playPos"></span>
     </button>
     <div class="controls">
-      <div class="ctl speed">
+      <div class="ctl grow">
+        <label for="practice">練習</label>
+        <select id="practice" class="wide">
+          <option value="en">英語を聞く</option>
+          <option value="enja">英語と日本語を聞く</option>
+          <option value="repeat">まねして言う</option>
+        </select>
+      </div>
+      <button class="ghost" id="btnFix" aria-pressed="false">なおす</button>
+    </div>
+    <div class="controls">
+      <div class="ctl grow">
         <label for="rate">はやさ</label>
         <input type="range" id="rate" min="0.3" max="1.2" step="0.05" value="0.85">
         <span id="rateVal" style="font-variant-numeric:tabular-nums;font-family:var(--font-en)">0.85</span>
       </div>
-      <div class="ctl">
-        <label for="mode">読み方</label>
-        <select id="mode">
-          <option value="whole">ふつう</option>
-          <option value="chunk">くぎって</option>
-          <option value="word">1語ずつ</option>
-        </select>
-      </div>
-      <div class="ctl">
-        <label for="repeat">くりかえし</label>
-        <select id="repeat"><option value="1">1回</option><option value="2">2回</option><option value="3">3回</option></select>
-      </div>
-      <button class="ghost" id="btnFix" aria-pressed="false">なおす</button>
     </div>
   </div>
 </div>
@@ -281,20 +339,24 @@
 
   /* ================= state ================= */
   var items = [];
+  var instructions = [];
   var playing = false, singleMode = false, cursor = -1, loopLeft = 0;
   var fixMode = false;
   var objUrl = null;
-  var worker = null, workerReady = null, busy = false;
-  var keepAlive = null;
-  var prefs = { rate:0.85, repeat:1, voice:"", mode:"whole" };
+  var workers = {}, workerPromise = {}, busy = false;
+  var keepAlive = null, waitTimer = null;
+  var spokenMs = 0;   // まねする間の長さを決めるため、その行の英語の所要時間を覚える
+
+  var prefs = { rate:0.85, repeat:1, voice:"", jaVoice:"", mode:"whole",
+                practice:"en", order:"en", readJa:true };
 
   var SAMPLE = [
-    { en:"Read the passage and answer the questions.", kind:"heading" },
-    { en:"library", kind:"word" },
-    { en:"borrow", kind:"word" },
-    { en:"I go to the library every Saturday.", kind:"sentence" },
-    { en:"She borrowed three books yesterday.", kind:"sentence" },
-    { en:"Where does he go on Saturday?", kind:"sentence" }
+    { en:"Read the passage and answer the questions.", ja:"文章を読んで、質問に答えましょう。", kind:"heading" },
+    { en:"library", ja:"図書館", kind:"word" },
+    { en:"borrow", ja:"借りる", kind:"word" },
+    { en:"I go to the library every Saturday.", ja:"わたしは毎週土曜日に図書館へ行きます。", kind:"sentence" },
+    { en:"She borrowed three books yesterday.", ja:"彼女はきのう本を三さつ借りました。", kind:"sentence" },
+    { en:"Where does he go on Saturday?", ja:"彼は土曜日にどこへ行きますか。", kind:"sentence" }
   ];
 
   function loadPrefs(){
@@ -321,66 +383,101 @@
     var h = getHistory(), ul = $("histList");
     ul.innerHTML = "";
     if(!h.length){
-      var li = document.createElement("li");
-      li.innerHTML = '<span style="color:var(--ink-faint);font-size:13px">まだありません。</span>';
-      ul.appendChild(li);
+      var li0 = document.createElement("li");
+      var sp0 = document.createElement("span");
+      sp0.style.cssText = "color:var(--ink-faint);font-size:13px";
+      sp0.textContent = "まだありません。";
+      li0.appendChild(sp0); ul.appendChild(li0);
       return;
     }
     h.forEach(function(rec){
       var li = document.createElement("li");
       var b = document.createElement("button");
       var d = new Date(rec.t);
-      var when = (d.getMonth()+1) + "/" + d.getDate() + " " + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
-      var sp1 = document.createElement("span"); sp1.className = "when"; sp1.textContent = when + " ・ " + rec.items.length + "行";
-      var sp2 = document.createElement("span"); sp2.className = "peek"; sp2.textContent = (rec.items[0] && rec.items[0].en) || "";
-      b.appendChild(sp1); b.appendChild(sp2);
+      var when = (d.getMonth()+1) + "/" + d.getDate() + " " +
+                 String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+      var s1 = document.createElement("span"); s1.className = "when";
+      s1.textContent = when + " ・ " + rec.items.length + "行";
+      var s2 = document.createElement("span"); s2.className = "peek";
+      s2.textContent = (rec.items[0] && rec.items[0].en) || "";
+      b.appendChild(s1); b.appendChild(s2);
       b.addEventListener("click", function(){
+        instructions = [];
+        renderInstructions();
         setSheet(rec.items.slice(), "きろく", false);
         $("history").hidden = true;
         $("btnHistory").setAttribute("aria-pressed","false");
       });
-      li.appendChild(b);
-      ul.appendChild(li);
+      li.appendChild(b); ul.appendChild(li);
     });
   }
 
   /* ================= speech ================= */
   var synth = window.speechSynthesis;
-  var voices = [], chosenVoice = null;
+  var enVoices = [], jaVoices = [], enVoice = null, jaVoice = null;
+
+  function fillVoiceSelect(sel, list, chosenName, fallbackLang){
+    sel.innerHTML = "";
+    list.forEach(function(v, i){
+      var o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = v.name.replace(/\s*\(.*\)$/, "");
+      sel.appendChild(o);
+    });
+    var idx = 0, i;
+    for(i = 0; i < list.length; i++){ if(list[i].name === chosenName){ idx = i; break; } }
+    if(!chosenName){
+      for(i = 0; i < list.length; i++){
+        if(new RegExp("^" + fallbackLang, "i").test(list[i].lang || "")){ idx = i; break; }
+      }
+    }
+    sel.value = String(idx);
+    return list[idx] || null;
+  }
 
   function pickVoices(){
     if(!synth) return;
     var all = [];
     try{ all = synth.getVoices() || []; }catch(e){ return; }
     if(!all.length) return;
-    voices = all.filter(function(v){ return /^en(-|_|$)/i.test(v.lang || ""); });
-    if(!voices.length) voices = all.slice();
-    var sel = $("voice");
-    sel.innerHTML = "";
-    voices.forEach(function(v,i){
-      var o = document.createElement("option");
-      o.value = String(i); o.textContent = v.name.replace(/\s*\(.*\)$/, "");
-      sel.appendChild(o);
-    });
-    var idx = 0;
-    if(prefs.voice){
-      var f = -1;
-      for(var i=0;i<voices.length;i++) if(voices[i].name === prefs.voice){ f = i; break; }
-      if(f >= 0) idx = f;
+
+    enVoices = all.filter(function(v){ return /^en(-|_|$)/i.test(v.lang || ""); });
+    if(!enVoices.length) enVoices = all.slice();
+    jaVoices = all.filter(function(v){ return /^ja(-|_|$)/i.test(v.lang || ""); });
+
+    enVoice = fillVoiceSelect($("voice"), enVoices, prefs.voice, "en[-_]US");
+    $("voiceRow").hidden = enVoices.length < 2;
+
+    if(jaVoices.length){
+      jaVoice = fillVoiceSelect($("jaVoice"), jaVoices, prefs.jaVoice, "ja");
+      $("jaVoiceRow").hidden = jaVoices.length < 2;
     } else {
-      for(var j=0;j<voices.length;j++) if(/^en[-_]US/i.test(voices[j].lang||"")){ idx = j; break; }
+      jaVoice = null;
+      $("jaVoiceRow").hidden = true;
     }
-    sel.value = String(idx);
-    chosenVoice = voices[idx] || null;
-    $("voiceWrap").hidden = voices.length < 2;
+    updatePracticeOptions();
   }
 
-  function speak(text, onDone){
-    if(!synth){ onDone && onDone(); return; }
+  // 日本語の声が無い端末では、日本語を聞くモードを選べないようにする
+  function updatePracticeOptions(){
+    var opt = $("practice").querySelector('option[value="enja"]');
+    if(!opt) return;
+    if(jaVoices.length){
+      opt.disabled = false;
+      opt.textContent = "英語と日本語を聞く";
+    } else {
+      opt.disabled = true;
+      opt.textContent = "英語と日本語を聞く（日本語の声なし）";
+      if(prefs.practice === "enja"){ prefs.practice = "en"; $("practice").value = "en"; savePrefs(); }
+    }
+  }
+
+  function speak(text, voice, rate, onDone){
+    if(!synth || !text){ onDone && onDone(); return; }
     try{ synth.cancel(); }catch(e){}
     var u = new SpeechSynthesisUtterance(text);
-    if(chosenVoice){ u.voice = chosenVoice; u.lang = chosenVoice.lang; } else { u.lang = "en-US"; }
-    u.rate = prefs.rate; u.pitch = 1;
+    if(voice){ u.voice = voice; u.lang = voice.lang; } else { u.lang = "en-US"; }
+    u.rate = rate; u.pitch = 1;
     var fired = false;
     var finish = function(){ if(fired) return; fired = true; onDone && onDone(); };
     u.onend = finish; u.onerror = finish;
@@ -391,38 +488,35 @@
     }, 10000);
     setTimeout(function(){ try{ synth.speak(u); }catch(e){ finish(); } }, 0);
   }
-  function stopSpeaking(){ clearInterval(keepAlive); try{ synth && synth.cancel(); }catch(e){} }
+  function stopSpeaking(){
+    clearInterval(keepAlive);
+    clearTimeout(waitTimer);
+    try{ synth && synth.cancel(); }catch(e){}
+  }
 
   /* ================= playback ================= */
   function setNow(i){
-    var els = $("lines").children;
-    var said = $("lines").querySelectorAll(".en .w.say");
+    var ol = $("lines"), els = ol.children;
+    var said = ol.querySelectorAll(".say");
     for(var m = 0; m < said.length; m++) said[m].classList.remove("say");
-    for(var k=0;k<els.length;k++) els[k].classList.toggle("now", k === i);
+    for(var k = 0; k < els.length; k++){
+      els[k].classList.toggle("now", k === i);
+      if(k !== i) els[k].classList.remove("waiting");
+    }
     if(i >= 0 && els[i]){ try{ els[i].scrollIntoView({ block:"center", behavior:"smooth" }); }catch(e){} }
     $("playPos").textContent = (playing && !singleMode && i >= 0) ? (i+1) + " / " + items.length : "";
   }
-  function playFrom(i, single){
-    if(!items.length) return;
-    playing = true; singleMode = !!single; cursor = i; loopLeft = prefs.repeat;
-    updatePlayButton(); step();
-  }
-  // 1行をどう区切って読むかを決める。
-  // whole = 文まるごと / chunk = 意味のかたまり / word = 1語ずつ
-  function chunkGroups(text, mode){
-    var toks = text.split(/\s+/).filter(Boolean);
-    if(!toks.length) return [{ text:text, idx:null }];
 
-    if(mode === "word"){
-      return toks.map(function(t, i){ return { text:t, idx:[i] }; });
-    }
+  function chunkGroups(text, mode){
+    var toks = String(text).split(/\s+/).filter(Boolean);
+    if(!toks.length) return [{ text:text, idx:null }];
+    if(mode === "word") return toks.map(function(t, i){ return { text:t, idx:[i] }; });
     if(mode === "chunk"){
       var out = [], cur = [], curIdx = [];
       toks.forEach(function(t, i){
         cur.push(t); curIdx.push(i);
         if(/[,;:.!?]["')\]]?$/.test(t) || cur.length >= 4){
-          out.push({ text:cur.join(" "), idx:curIdx });
-          cur = []; curIdx = [];
+          out.push({ text:cur.join(" "), idx:curIdx }); cur = []; curIdx = [];
         }
       });
       if(cur.length) out.push({ text:cur.join(" "), idx:curIdx });
@@ -431,7 +525,6 @@
     return [{ text:text, idx:null }];
   }
 
-  // いま読んでいる語に印をつける
   function highlight(lineIndex, idx){
     var el = $("lines").children[lineIndex];
     if(!el) return;
@@ -440,27 +533,88 @@
       ws[i].classList.toggle("say", !!idx && idx.indexOf(i) !== -1);
     }
   }
+  function markJa(lineIndex, on){
+    var el = $("lines").children[lineIndex];
+    if(!el) return;
+    var ja = el.querySelector(".ja");
+    if(ja) ja.classList.toggle("say", !!on);
+  }
+  function showCue(lineIndex, on){
+    var el = $("lines").children[lineIndex];
+    if(!el) return;
+    el.classList.toggle("waiting", !!on);
+    var old = el.querySelector(".cue");
+    if(old) old.parentNode.removeChild(old);
+    if(!on) return;
+    var body = el.querySelector(".body");
+    if(!body) return;
+    var cue = document.createElement("div");
+    cue.className = "cue";
+    var dot = document.createElement("i");
+    var t = document.createElement("span");
+    t.textContent = "まねして言ってみよう";
+    cue.appendChild(dot); cue.appendChild(t);
+    body.appendChild(cue);
+  }
+
+  function playFrom(i, single){
+    if(!items.length) return;
+    playing = true; singleMode = !!single; cursor = i; loopLeft = prefs.repeat;
+    updatePlayButton(); step();
+  }
+
+  // 1行ぶんの「読む順番」を組み立てる
+  function buildSequence(it){
+    var seq = [];
+    var groups = chunkGroups(it.en, prefs.mode);
+    var gap = prefs.mode === "word" ? 350 : (prefs.mode === "chunk" ? 500 : 0);
+    var useJa = (prefs.practice === "enja") && !!it.ja && !!jaVoice;
+
+    if(useJa && prefs.order === "ja") seq.push({ kind:"ja", text:it.ja, after:400 });
+    groups.forEach(function(g, gi){
+      seq.push({ kind:"en", text:g.text, idx:g.idx,
+                 after: gi < groups.length - 1 ? gap : ((useJa && prefs.order === "en") ? 400 : 0) });
+    });
+    if(useJa && prefs.order === "en") seq.push({ kind:"ja", text:it.ja, after:0 });
+    if(prefs.practice === "repeat") seq.push({ kind:"wait" });
+    return seq;
+  }
+
+  function runSeq(line, seq, i, done){
+    if(!playing || cursor !== line) return;
+    if(i >= seq.length){ highlight(line, null); markJa(line, false); done(); return; }
+    var st = seq[i];
+
+    if(st.kind === "wait"){
+      highlight(line, null);
+      showCue(line, true);
+      var ms = Math.max(1400, Math.round(spokenMs * 1.2) + 400);
+      waitTimer = setTimeout(function(){
+        showCue(line, false);
+        runSeq(line, seq, i + 1, done);
+      }, ms);
+      return;
+    }
+
+    var isEn = st.kind === "en";
+    highlight(line, isEn ? st.idx : null);
+    markJa(line, !isEn);
+    var t0 = Date.now();
+    // 日本語は母語なので、英語のためのゆっくり設定には引きずらせない
+    speak(st.text, isEn ? enVoice : jaVoice, isEn ? prefs.rate : 0.95, function(){
+      if(!playing || cursor !== line) return;
+      if(isEn) spokenMs += Date.now() - t0;
+      setTimeout(function(){ runSeq(line, seq, i + 1, done); }, st.after || 0);
+    });
+  }
 
   function step(){
     if(!playing) return;
     if(cursor < 0 || cursor >= items.length){ stopAll(); return; }
     setNow(cursor);
-
     var line = cursor;
-    var groups = chunkGroups(items[line].en, prefs.mode);
-    var gap = prefs.mode === "word" ? 350 : (prefs.mode === "chunk" ? 500 : 0);
-    var gi = 0;
-
-    (function sayNext(){
-      if(!playing || cursor !== line) return;
-      if(gi >= groups.length){ highlight(line, null); afterLine(); return; }
-      highlight(line, groups[gi].idx);
-      speak(groups[gi].text, function(){
-        if(!playing || cursor !== line) return;
-        gi++;
-        setTimeout(sayNext, gi < groups.length ? gap : 0);
-      });
-    })();
+    spokenMs = 0;
+    runSeq(line, buildSequence(items[line]), 0, afterLine);
   }
 
   function afterLine(){
@@ -471,10 +625,17 @@
     if(cursor >= items.length){ stopAll(); return; }
     setTimeout(step, 520);
   }
+
   function stopAll(){
-    playing = false; singleMode = false; cursor = -1;
-    stopSpeaking(); setNow(-1); updatePlayButton();
+    playing = false; singleMode = false;
+    var old = cursor;
+    cursor = -1;
+    stopSpeaking();
+    if(old >= 0) showCue(old, false);
+    setNow(-1);
+    updatePlayButton();
   }
+
   function updatePlayButton(){
     var btn = $("playAll");
     btn.classList.toggle("stopping", playing);
@@ -517,6 +678,14 @@
         inp.setAttribute("aria-label", (i+1) + "行目の英文");
         inp.addEventListener("input", function(){ items[i].en = inp.value; });
         body.appendChild(inp);
+
+        if(it.ja){
+          var jin = document.createElement("input");
+          jin.type = "text"; jin.className = "edit jaedit"; jin.value = it.ja;
+          jin.setAttribute("aria-label", (i+1) + "行目の日本語");
+          jin.addEventListener("input", function(){ items[i].ja = jin.value; });
+          body.appendChild(jin);
+        }
         li.appendChild(body);
 
         var del = document.createElement("button");
@@ -524,7 +693,7 @@
         del.setAttribute("aria-label", (i+1) + "行目をけす");
         del.textContent = "×";
         del.addEventListener("click", function(){
-          items.splice(i,1);
+          items.splice(i, 1);
           items = items.filter(function(x){ return x.en.trim(); });
           render();
         });
@@ -532,7 +701,6 @@
       } else {
         var en = document.createElement("span");
         en.className = "en";
-        // 語ごとに span を作る。読み上げ中の強調と、辞書に無い語の点線に使う。
         it.en.split(/(\s+)/).forEach(function(p){
           if(!p) return;
           if(/^\s+$/.test(p)){ en.appendChild(document.createTextNode(p)); return; }
@@ -547,6 +715,13 @@
           en.appendChild(sp);
         });
         body.appendChild(en);
+
+        if(it.ja){
+          var jaEl = document.createElement("div");
+          jaEl.className = "ja";
+          jaEl.textContent = it.ja;
+          body.appendChild(jaEl);
+        }
         li.appendChild(body);
 
         var spk = document.createElement("span");
@@ -564,7 +739,9 @@
       }
       ol.appendChild(li);
     });
+    var withJa = items.filter(function(x){ return x.ja; }).length;
     $("sheetCount").textContent = items.length + " 行"
+      + (withJa ? " ・ 訳 " + withJa : "")
       + (suspects ? " ・ あやしい " + suspects + " 語" : "");
     updatePlayButton();
   }
@@ -599,6 +776,45 @@
     render();
   }
 
+  /* ================= プリントの指示 ================= */
+  var INSTR_RE = /(回目|聞きましょう|言いましょう|読みましょう|まねして|なぞりましょう|書きましょう|練習しましょう)/;
+
+  function instructionMode(s){
+    if(/日本語と英語|英語と日本語/.test(s)) return "enja";
+    if(/まねして|リピート/.test(s)) return "repeat";
+    if(/英語を?\s*聞/.test(s)) return "en";
+    if(/言いましょう/.test(s)) return "repeat";
+    return null;
+  }
+  var MODE_LABEL = { en:"英語を聞く", enja:"英語と日本語を聞く", repeat:"まねして言う" };
+
+  function renderInstructions(){
+    var box = $("instr");
+    if(!instructions.length){ box.hidden = true; return; }
+    box.hidden = false;
+    $("instrText").textContent = instructions.join("　/　");
+
+    var want = null;
+    for(var i = 0; i < instructions.length; i++){
+      var m = instructionMode(instructions[i]);
+      if(m){ want = m; break; }
+    }
+    var btn = $("instrApply");
+    if(want && want !== prefs.practice && !(want === "enja" && !jaVoices.length)){
+      btn.hidden = false;
+      btn.textContent = "「" + MODE_LABEL[want] + "」にする";
+      btn.onclick = function(){
+        prefs.practice = want;
+        $("practice").value = want;
+        savePrefs();
+        renderInstructions();
+      };
+    } else {
+      btn.hidden = true;
+      btn.onclick = null;
+    }
+  }
+
   /* ================= status ================= */
   function showStatus(title, note, opts){
     opts = opts || {};
@@ -617,7 +833,6 @@
   function hideStatus(){ $("status").hidden = true; $("statusAction").onclick = null; }
 
   /* ================= image preparation ================= */
-  // createImageBitmap が無い / 使えない端末のための読み込み
   function loadViaImg(file){
     return new Promise(function(resolve, reject){
       var url = URL.createObjectURL(file);
@@ -632,11 +847,9 @@
     var bmp = null;
     if(typeof createImageBitmap === "function"){
       try{ bmp = await createImageBitmap(file, { imageOrientation:"from-image" }); }
-      catch(e){
-        try{ bmp = await createImageBitmap(file); }catch(e2){ bmp = null; }
-      }
+      catch(e){ try{ bmp = await createImageBitmap(file); }catch(e2){ bmp = null; } }
     }
-    if(!bmp) bmp = await loadViaImg(file);   // <img> は向き情報をブラウザ側で適用してくれる
+    if(!bmp) bmp = await loadViaImg(file);
 
     var long = Math.max(bmp.width, bmp.height);
     var scale = 1;
@@ -651,7 +864,6 @@
     ctx.drawImage(bmp, 0, 0, w, h);
     if(bmp.close) bmp.close();
 
-    // グレースケール化 + コントラストを伸ばす（スマホ写真のムラ対策）
     try{
       var img = ctx.getImageData(0, 0, w, h);
       var d = img.data, hist = new Uint32Array(256), i, g;
@@ -673,139 +885,66 @@
         for(i = 0; i < d.length; i += 4){ d[i] = d[i+1] = d[i+2] = lut[d[i]]; }
       }
       ctx.putImageData(img, 0, 0);
-    }catch(e){ /* 加工に失敗しても元画像のまま認識させる */ }
+    }catch(e){}
 
     return cv;
   }
 
-  /* ================= OCR ================= */
-  var STAGE = {
-    "loading tesseract core":"エンジンを読みこんでいます",
-    "initializing tesseract":"エンジンを準備しています",
-    "loading language traineddata":"英語の辞書を読みこんでいます",
-    "initializing api":"準備しています",
-    "recognizing text":"文字を読み取っています"
-  };
-
-  function getWorker(){
-    if(workerReady) return workerReady;
-    workerReady = (async function(){
-      if(typeof Tesseract === "undefined") throw new Error("no-tesseract");
-      return await Tesseract.createWorker("eng", 1, {
-        logger: function(m){
-          var label = STAGE[m.status] || "処理中";
-          var p = (typeof m.progress === "number") ? m.progress : 0;
-          showStatus(label + "…", "はじめの1回だけ、少し時間がかかります。", { busy:true, progress:p });
-        }
-      });
-    })();
-    workerReady.catch(function(){ workerReady = null; });
-    return workerReady;
-  }
-
-  async function readPhoto(file){
-    if(busy) return;
-    busy = true;
-    stopAll();
-    try{
-      showStatus("写真を準備しています…", "", { busy:true, progress:0 });
-      var canvas = await prepare(file);
-
-      worker = await getWorker();
-
-      showStatus("文字を読み取っています…", "", { busy:true, progress:0 });
-      var res = await worker.recognize(canvas, {}, { text:true, blocks:true });
-
-      try{ await loadDict(); }catch(e){}   // 読み込めなければ辞書なしで続行
-
-      var raw = extractLines(res && res.data);
-      var list = cleanUp(raw);
-
-      if(!list.length){
-        showStatus("英文が見つかりませんでした", "明るい場所で、プリントが画面いっぱいに写るように撮りなおしてください。", { error:true });
-        return;
-      }
-      hideStatus();
-      setSheet(list, "このプリント", true);
-    }catch(err){
-      var msg = (err && err.message) || "";
-      if(msg === "no-tesseract"){
-        showStatus("読み取りエンジンを読みこめませんでした", "通信できる状態で一度開くと、次からはオフラインでも使えます。", { error:true });
-      } else {
-        showStatus("読み取りに失敗しました", "もう一度撮りなおしてください。それでも直らないときは、ページを開き直してください。", { error:true });
-      }
-      if(window.console) console.error(err);
-    }finally{
-      busy = false;
-    }
-  }
-
-  // blocks → paragraphs → lines を辿る。構造が変わっても text だけは拾えるようにする。
-  function extractLines(data){
-    var out = [];
-    if(!data) return out;
-    (function walk(node){
-      if(!node || typeof node !== "object") return;
-      if(Array.isArray(node)){ node.forEach(walk); return; }
-      if(Array.isArray(node.lines)){
-        node.lines.forEach(function(l){
-          if(l && typeof l.text === "string"){
-            out.push({ text:l.text, conf: (typeof l.confidence === "number") ? l.confidence : 100 });
-          }
-        });
-      }
-      ["blocks","paragraphs","children"].forEach(function(k){
-        if(Array.isArray(node[k])) node[k].forEach(walk);
-      });
-    })(data.blocks);
-    if(!out.length && typeof data.text === "string"){
-      data.text.split(/\r?\n/).forEach(function(t){ out.push({ text:t, conf:100 }); });
-    }
-    return out;
-  }
-
-  /* ---- 英文の掃除（記号ノイズ・分断された短縮形） ---- */
+  /* ================= 英文の掃除 ================= */
   function tidy(s){
     s = String(s);
-    // 全角・特殊な引用符やダッシュを ASCII に寄せる
     s = s.replace(/[‘’ʼ＇]/g, "'")
          .replace(/[“”＂]/g, '"')
          .replace(/[‐-―－]/g, "-")
          .replace(/[ 　]/g, " ");
-    // 英文には出てこない記号は捨てる（罫線や注釈記号の誤認 : > < | ~ _ * # など）
     s = s.replace(/[^A-Za-z0-9 .,!?;:'"()\-]/g, " ");
     s = s.replace(/-{2,}/g, " ").replace(/\.{4,}/g, "...");
 
-    // 対になっていない二重引用符を落とす。
-    // 注釈記号を " と誤認した He doesn't" have ... のようなケース。
     if(((s.match(/"/g) || []).length % 2) === 1){
       s = s.replace(/([A-Za-z])"(?=\s|$)/g, "$1");
     }
-    if(((s.match(/"/g) || []).length % 2) === 1){
-      s = s.replace(/"/g, "");
-    }
-    s = s.replace(/(^|\s)'(?=\s|$)/g, "$1");   // 宙に浮いたアポストロフィ
+    if(((s.match(/"/g) || []).length % 2) === 1){ s = s.replace(/"/g, ""); }
+    s = s.replace(/(^|\s)'(?=\s|$)/g, "$1");
 
-    // 分断された短縮形をつなぐ: does n't / doesn' t / I 'm
     s = s.replace(/([A-Za-z])\s+n\s*'\s*t\b/gi, "$1n't");
     s = s.replace(/([A-Za-z])\s+'\s*(t|s|re|ve|ll|m|d)\b/gi, "$1'$2");
     s = s.replace(/'\s+(t|s|re|ve|ll|m|d)\b/gi, "'$1");
 
-    // 句読点まわりの空白
     s = s.replace(/\s+([.,!?;:])/g, "$1");
     s = s.replace(/([.,!?;:])(?=[A-Za-z])/g, "$1 ");
     s = s.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
 
-    // 行の端に取り残された意味のない1文字（a / A / I / i は残す）
     s = s.replace(/^\s*[^AaIi\s]\s+/, "");
     s = s.replace(/\s+[^AaIi.!?"')\s]\s*$/, "");
 
     return s.replace(/\s+/g, " ").trim();
   }
 
-  /* ---- 英単語の辞書（読みまちがいの検出と修正に使う） ---- */
+  /* ================= 日本語の掃除 ================= */
+  var JA_CHARS = "぀-ゟ゠-ヿ一-鿿ー";
+  var JA_RE = new RegExp("[" + JA_CHARS + "]", "g");
+
+  function isJa(s){
+    var m = String(s).match(JA_RE);
+    var jp = m ? m.length : 0;
+    var solid = String(s).replace(/\s/g, "").length;
+    return jp >= 2 && solid > 0 && (jp / solid) >= 0.3;
+  }
+
+  function tidyJa(s){
+    s = String(s).replace(/　/g, " ");
+    s = s.replace(/[|~^_*#<>\\{}\[\]@+=]/g, "");
+    // Tesseract が日本語の字間に入れる空白を詰める（重なり対策で数回まわす）
+    var gap = new RegExp("([" + JA_CHARS + "、。])\\s+([" + JA_CHARS + "、。])", "g");
+    for(var i = 0; i < 4; i++) s = s.replace(gap, "$1$2");
+    s = s.replace(/\s*[:：]\s*/g, "：");
+    // 行末に紛れこんだ教材番号（E 31a など）を落とす
+    s = s.replace(/\s*[A-Z]{1,2}\s?[0-9]{1,3}\s?[ab]?\s*$/, "");
+    return s.replace(/\s+/g, " ").trim();
+  }
+
+  /* ================= 英単語の辞書 ================= */
   var DICT = null, dictPromise = null;
-  // 短縮形の語幹など、一般的な単語リストに載らないもの
   var EXTRA = ["doesn","don","isn","aren","wasn","weren","didn","couldn","wouldn","shouldn",
                "haven","hasn","hadn","won","ain","o'clock","tv","ok","mom","dad","grandma",
                "grandpa","math","okay","hi","bye","yeah"];
@@ -836,9 +975,8 @@
     return dictPromise;
   }
 
-  // 語を辞書で確かめる。大文字を含む語（固有名詞・略語）と数字は対象外。
   function wordStatus(tok){
-    var core = tok.replace(/^[^A-Za-z0-9']+/, "").replace(/[^A-Za-z0-9']+$/, "");
+    var core = String(tok).replace(/^[^A-Za-z0-9']+/, "").replace(/[^A-Za-z0-9']+$/, "");
     if(!core) return "skip";
     if(/[A-Z]/.test(core)) return "skip";
     if(/^[0-9]+$/.test(core)) return "skip";
@@ -850,8 +988,6 @@
     return DICT.has(base) ? "ok" : "bad";
   }
 
-  // Tesseract が起こしやすい取り違えだけを試し、辞書に当たる候補が
-  // ちょうど1つのときだけ直す。複数該当・該当なしのときは触らない。
   var CONFUSE = [
     ["0","o"],["1","l"],["1","i"],["5","s"],["8","b"],["9","g"],["6","b"],["3","e"],["7","t"],["4","a"],
     ["rn","m"],["cl","d"],["vv","w"],["ii","u"],
@@ -878,8 +1014,7 @@
       }
     }
     if(hits.size !== 1) return tok;
-    var fixed = hits.values().next().value;
-    return lead + fixed + tail;
+    return lead + hits.values().next().value + tail;
   }
 
   function repairLine(s){
@@ -894,50 +1029,200 @@
     if(letters < 2) return true;
     var solid = s.replace(/\s/g, "").length;
     if(!solid) return true;
-    if(letters / solid < 0.5) return true;                 // 記号や数字だらけ
-    if(/^[A-Z]{1,2}\s?\d{1,3}\s?[ab]?$/.test(s)) return true; // 公文の教材番号
+    if(letters / solid < 0.5) return true;
+    if(/^[A-Z]{1,2}\s?\d{1,3}\s?[ab]?$/.test(s)) return true;
     if(/^(kumon|name|date)$/i.test(s)) return true;
     return false;
   }
 
+  /* ================= OCR ================= */
+  var STAGE = {
+    "loading tesseract core":"エンジンを読みこんでいます",
+    "initializing tesseract":"エンジンを準備しています",
+    "loading language traineddata":"辞書データを読みこんでいます",
+    "initializing api":"準備しています",
+    "recognizing text":"文字を読み取っています"
+  };
+
+  // 英語と日本語で別の認識器を使う。英語の精度を保ったまま日本語を足すため。
+  function getWorker(lang){
+    if(workerPromise[lang]) return workerPromise[lang];
+    workerPromise[lang] = (async function(){
+      if(typeof Tesseract === "undefined") throw new Error("no-tesseract");
+      var opts = {
+        logger: function(m){
+          var label = STAGE[m.status] || "処理中";
+          if(lang === "jpn") label = "日本語の" + label;
+          var p = (typeof m.progress === "number") ? m.progress : 0;
+          showStatus(label + "…", "はじめの1回だけ、少し時間がかかります。", { busy:true, progress:p });
+        }
+      };
+      // 日本語は軽い方のデータを使う（約1.5MB）。英語は既定のまま。
+      if(lang === "jpn") opts.langPath = "https://tessdata.projectnaptha.com/4.0.0_fast";
+      var w = await Tesseract.createWorker(lang, 1, opts);
+      workers[lang] = w;
+      return w;
+    })();
+    workerPromise[lang].catch(function(){ workerPromise[lang] = null; });
+    return workerPromise[lang];
+  }
+
+  function extractLines(data){
+    var out = [];
+    if(!data) return out;
+    (function walk(node){
+      if(!node || typeof node !== "object") return;
+      if(Array.isArray(node)){ node.forEach(walk); return; }
+      if(Array.isArray(node.lines)){
+        node.lines.forEach(function(l){
+          if(l && typeof l.text === "string"){
+            out.push({
+              text: l.text,
+              conf: (typeof l.confidence === "number") ? l.confidence : 100,
+              bbox: l.bbox || null
+            });
+          }
+        });
+      }
+      ["blocks","paragraphs","children"].forEach(function(k){
+        if(Array.isArray(node[k])) node[k].forEach(walk);
+      });
+    })(data.blocks);
+    if(!out.length && typeof data.text === "string"){
+      data.text.split(/\r?\n/).forEach(function(t){ out.push({ text:t, conf:100, bbox:null }); });
+    }
+    return out;
+  }
+
+  function mergeBox(a, b){
+    if(!a) return b;
+    if(!b) return a;
+    return { x0:Math.min(a.x0,b.x0), y0:Math.min(a.y0,b.y0), x1:Math.max(a.x1,b.x1), y1:Math.max(a.y1,b.y1) };
+  }
+
+  // 英語の認識結果 -> 読み上げる単位の配列（座標つき）
   function cleanUp(raw){
-    // 1) 掃除
     var lines = [];
     raw.forEach(function(r){
       if(r.conf < 50) return;
       var t = tidy(r.text);
       if(!t) return;
       if(looksLikeJunk(t)) return;
-      lines.push(t);
+      lines.push({ text:t, bbox:r.bbox });
     });
 
-    // 2) 折り返された文をつなぐ。
-    //    つなぐのは「複数語で終止符がない行」の続きだけ。単語リストの1語ずつは別々に保つ。
+    // 折り返された文をつなぐ（複数語で終止符のない行のみ）
     var joined = [];
     for(var i = 0; i < lines.length; i++){
-      var cur = lines[i];
+      var cur = lines[i].text, box = lines[i].bbox;
       while(i + 1 < lines.length
             && /\s/.test(cur)
             && !/[.!?:;"']$/.test(cur)
-            && /^[a-z]/.test(lines[i+1])){
-        cur = cur + " " + lines[i+1];
+            && /^[a-z]/.test(lines[i+1].text)){
+        cur = cur + " " + lines[i+1].text;
+        box = mergeBox(box, lines[i+1].bbox);
         i++;
       }
-      joined.push(cur);
+      joined.push({ text:cur, bbox:box });
     }
 
-    // 3) 1行に複数の文があれば分ける
     var out = [];
     joined.forEach(function(line){
-      var parts = line.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [line];
+      var parts = line.text.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [line.text];
       parts.forEach(function(p){
         p = repairLine(p.trim());
         if(!p || looksLikeJunk(p)) return;
-        if(out.length && out[out.length-1].en === p) return;  // 直前と同じなら捨てる
-        out.push({ en:p, kind: /\s/.test(p) ? "sentence" : "word" });
+        if(out.length && out[out.length-1].en === p) return;
+        out.push({ en:p, ja:"", kind: /\s/.test(p) ? "sentence" : "word", bbox: line.bbox });
       });
     });
     return out.slice(0, 120);
+  }
+
+  // 日本語の認識結果から、日本語の行だけを拾う
+  function collectJa(raw){
+    var out = [];
+    raw.forEach(function(r){
+      if(r.conf < 45) return;
+      var t = tidyJa(r.text);
+      if(!t || !isJa(t)) return;
+      out.push({ text:t, bbox:r.bbox });
+    });
+    return out;
+  }
+
+  // 英文の真下にある日本語を、その訳として結びつける。
+  // 結びつかなかったもののうち、指示文らしいものだけを指示として返す。
+  function attachJa(list, jaLines){
+    var notes = [];
+    jaLines.forEach(function(j){
+      if(!j.bbox){ notes.push(j.text); return; }
+      var jh = Math.max(1, j.bbox.y1 - j.bbox.y0);
+      var best = null, bestGap = Infinity;
+
+      list.forEach(function(it){
+        if(!it.bbox) return;
+        var gap = j.bbox.y0 - it.bbox.y1;
+        if(gap < -jh * 0.5) return;                        // 英文より上にある
+        if(gap > jh * 2.5) return;                         // 離れすぎ
+        var overlap = Math.min(it.bbox.x1, j.bbox.x1) - Math.max(it.bbox.x0, j.bbox.x0);
+        var narrow = Math.min(it.bbox.x1 - it.bbox.x0, j.bbox.x1 - j.bbox.x0);
+        if(narrow <= 0 || overlap / narrow < 0.2) return;  // 横方向に重なっていない
+        if(gap < bestGap){ bestGap = gap; best = it; }
+      });
+
+      if(best) best.ja = best.ja ? (best.ja + j.text) : j.text;
+      else notes.push(j.text);
+    });
+    return notes.filter(function(t){ return INSTR_RE.test(t); });
+  }
+
+  async function readPhoto(file){
+    if(busy) return;
+    busy = true;
+    stopAll();
+    instructions = [];
+    renderInstructions();
+    try{
+      showStatus("写真を準備しています…", "", { busy:true, progress:0 });
+      var canvas = await prepare(file);
+
+      var engWorker = await getWorker("eng");
+      showStatus("英語を読み取っています…", "", { busy:true, progress:0 });
+      var engRes = await engWorker.recognize(canvas, {}, { text:true, blocks:true });
+
+      try{ await loadDict(); }catch(e){}
+      var list = cleanUp(extractLines(engRes && engRes.data));
+
+      if(prefs.readJa){
+        try{
+          var jpnWorker = await getWorker("jpn");
+          showStatus("日本語を読み取っています…", "", { busy:true, progress:0 });
+          var jpnRes = await jpnWorker.recognize(canvas, {}, { text:true, blocks:true });
+          instructions = attachJa(list, collectJa(extractLines(jpnRes && jpnRes.data)));
+        }catch(e){
+          if(window.console) console.warn("日本語の読み取りに失敗:", e);
+        }
+      }
+
+      if(!list.length){
+        showStatus("英文が見つかりませんでした", "明るい場所で、プリントが画面いっぱいに写るように撮りなおしてください。", { error:true });
+        return;
+      }
+      hideStatus();
+      renderInstructions();
+      setSheet(list, "このプリント", true);
+    }catch(err){
+      var msg = (err && err.message) || "";
+      if(msg === "no-tesseract"){
+        showStatus("読み取りエンジンを読みこめませんでした", "通信できる状態で一度開くと、次からはオフラインでも使えます。", { error:true });
+      } else {
+        showStatus("読み取りに失敗しました", "もう一度撮りなおしてください。それでも直らないときは、ページを開き直してください。", { error:true });
+      }
+      if(window.console) console.error(err);
+    }finally{
+      busy = false;
+    }
   }
 
   /* ================= manual input ================= */
@@ -949,7 +1234,7 @@
       var parts = line.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [line];
       parts.forEach(function(p){
         p = p.trim();
-        if(p) out.push({ en:p, kind: /\s/.test(p) ? "sentence" : "word" });
+        if(p) out.push({ en:p, ja:"", kind: /\s/.test(p) ? "sentence" : "word" });
       });
     });
     return out.slice(0, 120);
@@ -960,24 +1245,37 @@
   $("rate").value = String(prefs.rate);
   $("rateVal").textContent = Number(prefs.rate).toFixed(2);
   $("repeat").value = String(prefs.repeat);
+  $("mode").value = prefs.mode;
+  $("practice").value = prefs.practice;
+  $("order").value = prefs.order;
+  $("readJa").checked = !!prefs.readJa;
 
   $("rate").addEventListener("input", function(){
     prefs.rate = parseFloat(this.value);
     $("rateVal").textContent = prefs.rate.toFixed(2);
     savePrefs();
   });
-  $("mode").value = prefs.mode;
-  $("mode").addEventListener("change", function(){
-    prefs.mode = this.value; savePrefs();
-    if(playing){ stopSpeaking(); step(); }   // 読んでいる途中でも、その行から切り替える
-  });
   $("repeat").addEventListener("change", function(){
     prefs.repeat = parseInt(this.value, 10) || 1; savePrefs();
   });
+  $("mode").addEventListener("change", function(){
+    prefs.mode = this.value; savePrefs();
+    if(playing){ stopSpeaking(); step(); }
+  });
+  $("practice").addEventListener("change", function(){
+    prefs.practice = this.value; savePrefs();
+    if(playing){ stopSpeaking(); step(); }
+    renderInstructions();
+  });
+  $("order").addEventListener("change", function(){ prefs.order = this.value; savePrefs(); });
+  $("readJa").addEventListener("change", function(){ prefs.readJa = this.checked; savePrefs(); });
   $("voice").addEventListener("change", function(){
-    chosenVoice = voices[parseInt(this.value, 10)] || null;
-    prefs.voice = chosenVoice ? chosenVoice.name : "";
-    savePrefs();
+    enVoice = enVoices[parseInt(this.value, 10)] || null;
+    prefs.voice = enVoice ? enVoice.name : ""; savePrefs();
+  });
+  $("jaVoice").addEventListener("change", function(){
+    jaVoice = jaVoices[parseInt(this.value, 10)] || null;
+    prefs.jaVoice = jaVoice ? jaVoice.name : ""; savePrefs();
   });
   $("btnFix").addEventListener("click", function(){ setFixMode(!fixMode); });
   $("playAll").addEventListener("click", function(){
@@ -1006,15 +1304,20 @@
     var list = parseManual($("manualText").value || "");
     if(!list.length){ showStatus("英文が入力されていません", "1行に1文ずつ入れてください。", { error:true }); return; }
     hideStatus();
+    instructions = []; renderInstructions();
     setSheet(list, "入力した英文", true);
   });
 
+  function togglePanel(id, btnId){
+    var open = $(id).hidden;
+    $(id).hidden = !open;
+    $(btnId).setAttribute("aria-pressed", open ? "true" : "false");
+    return open;
+  }
   $("btnHistory").addEventListener("click", function(){
-    var open = $("history").hidden;
-    $("history").hidden = !open;
-    this.setAttribute("aria-pressed", open ? "true" : "false");
-    if(open) renderHistory();
+    if(togglePanel("history","btnHistory")) renderHistory();
   });
+  $("btnSettings").addEventListener("click", function(){ togglePanel("settings","btnSettings"); });
   $("btnClearHist").addEventListener("click", function(){
     try{ localStorage.removeItem("ondoku-history"); }catch(e){}
     renderHistory();
@@ -1031,7 +1334,9 @@
 
   window.addEventListener("pagehide", function(){
     stopSpeaking();
-    if(worker && worker.terminate) { try{ worker.terminate(); }catch(e){} }
+    Object.keys(workers).forEach(function(k){
+      try{ workers[k] && workers[k].terminate && workers[k].terminate(); }catch(e){}
+    });
   });
   document.addEventListener("visibilitychange", function(){ if(document.hidden) stopAll(); });
 
@@ -1047,7 +1352,14 @@
   }
 
   // ローカル検証用の入口（通常の利用では使いません）
-  window.__ondoku = { readPhoto: readPhoto, cleanUp: cleanUp, getItems: function(){ return items; } };
+  window.__ondoku = {
+    readPhoto: readPhoto, cleanUp: cleanUp, collectJa: collectJa, attachJa: attachJa,
+    tidyJa: tidyJa, isJa: isJa, instructionMode: instructionMode, buildSequence: buildSequence,
+    extractLines: extractLines,
+    getItems: function(){ return items; },
+    setItems: function(l){ setSheet(l, "テスト", false); },
+    getPrefs: function(){ return prefs; }
+  };
 })();
 </script>
 </body>
