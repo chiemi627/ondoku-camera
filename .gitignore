@@ -1,0 +1,4 @@
+.claude/
+.DS_Store
+# Claude アーティファクト版（claude.ai のビューア内でのみ動くため、ここでは配信しない）
+ondoku-camera.html

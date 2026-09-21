@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>おんどくカメラ</title>
+<meta name="description" content="英語のプリントをカメラで撮ると、英文を抜き出して読み上げます。">
+<meta name="theme-color" content="#f6f3ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12161d" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="おんどく">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&family=Zen+Maru+Gothic:wght@400;500;700&display=swap">
+<style>
+  :root{
+    --paper:#f6f3ec; --card:#ffffff; --card-2:#fbfaf7;
+    --ink:#1a2236; --ink-soft:#5d687f; --ink-faint:#8a93a6;
+    --rule:#e2dcd0; --rule-hard:#cfc7b7;
+    --blue:#2a5db0; --blue-ink:#2a5db0; --blue-wash:#e9eff9;
+    --red:#c8402f; --red-wash:#fbe9e6; --green:#2c7a5c;
+    --shadow:0 1px 2px rgba(26,34,54,.06), 0 6px 18px rgba(26,34,54,.07);
+    --shadow-lift:0 2px 4px rgba(26,34,54,.08), 0 12px 28px rgba(26,34,54,.12);
+    --radius:14px;
+    --font-en:"Lexend",-apple-system,"Segoe UI",sans-serif;
+    --font-jp:"Zen Maru Gothic",-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+    color-scheme:light dark;
+    padding-top:env(safe-area-inset-top, 0px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#12161d; --card:#1a202a; --card-2:#1e2531;
+      --ink:#eef1f7; --ink-soft:#a3adc2; --ink-faint:#7b8499;
+      --rule:#2b3341; --rule-hard:#3a4353;
+      --blue:#7fa8ee; --blue-ink:#9dbdf5; --blue-wash:#1d2838;
+      --red:#f0897a; --red-wash:#341f1c; --green:#65c39c;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
+      --shadow-lift:0 2px 4px rgba(0,0,0,.45), 0 12px 28px rgba(0,0,0,.5);
+    }
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--font-jp); font-size:15px; line-height:1.6;
+    padding-inline:16px; padding-bottom:180px;
+    -webkit-text-size-adjust:100%; -webkit-tap-highlight-color:transparent;
+  }
+  img{max-width:100%;}
+  [hidden]{display:none !important;}
+  .wrap{max-width:620px;margin:0 auto;}
+
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-block:18px 14px;}
+  .bar h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.02em;}
+  .bar h1 .dot{color:var(--red);}
+
+  button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer;}
+  button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,li:focus-visible{
+    outline:3px solid var(--blue);outline-offset:2px;
+  }
+  .primary{
+    background:var(--blue);color:#fff;border:none;border-radius:var(--radius);
+    padding:16px 20px;font-weight:700;font-size:17px;box-shadow:var(--shadow);
+    display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
+  }
+  .primary:active{transform:translateY(1px);}
+  .secondary{
+    background:var(--card);color:var(--blue-ink);border:1.5px solid var(--rule-hard);
+    border-radius:var(--radius);padding:13px 18px;font-weight:500;width:100%;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .linky{background:none;border:none;color:var(--ink-soft);text-decoration:underline;text-underline-offset:3px;padding:8px 4px;font-size:13px;}
+  .ghost{background:var(--card);border:1.5px solid var(--rule);border-radius:999px;padding:7px 14px;font-size:13px;font-weight:500;color:var(--ink-soft);white-space:nowrap;}
+  .ghost[aria-pressed="true"]{background:var(--blue-wash);border-color:var(--blue);color:var(--blue-ink);}
+
+  .capture{
+    background:var(--card);border:1px solid var(--rule);border-radius:18px;
+    padding:20px 18px;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center;
+  }
+  .capture .lead{margin:0 0 4px;color:var(--ink-soft);font-size:14px;max-width:34em;}
+  .capture .btns{display:flex;flex-direction:column;gap:10px;width:100%;max-width:340px;}
+
+  .panel{margin-top:14px;background:var(--card);border:1px solid var(--rule);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:10px;}
+  .panel h2{margin:0;font-size:14px;color:var(--ink-soft);font-weight:500;}
+  .panel textarea{
+    width:100%;min-height:110px;resize:vertical;
+    font-family:var(--font-en);font-size:16px;line-height:1.5;
+    background:var(--card-2);color:var(--ink);
+    border:1px solid var(--rule-hard);border-radius:10px;padding:10px 12px;
+  }
+  ul.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
+  ul.hist li{display:flex;align-items:center;gap:10px;}
+  ul.hist button{
+    flex:1;text-align:left;background:var(--card-2);border:1px solid var(--rule);
+    border-radius:10px;padding:9px 12px;min-width:0;
+  }
+  ul.hist .when{font-size:11px;color:var(--ink-faint);font-variant-numeric:tabular-nums;}
+  ul.hist .peek{display:block;font-family:var(--font-en);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  .status{
+    margin-top:14px;display:flex;align-items:center;gap:12px;
+    background:var(--card);border:1px solid var(--rule);border-left:4px solid var(--blue);
+    border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);
+  }
+  .status.err{border-left-color:var(--red);}
+  .status .txt{flex:1;min-width:0;}
+  .status .txt strong{display:block;font-size:15px;}
+  .status .txt span{font-size:13px;color:var(--ink-soft);}
+  .spinner{width:20px;height:20px;border-radius:50%;flex:none;border:3px solid var(--blue-wash);border-top-color:var(--blue);animation:spin .9s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .prog{height:4px;background:var(--blue-wash);border-radius:99px;overflow:hidden;margin-top:7px;}
+  .prog i{display:block;height:100%;background:var(--blue);width:0;transition:width .25s ease;}
+  @media (prefers-reduced-motion: reduce){ .spinner{animation-duration:2.4s} *{scroll-behavior:auto !important} }
+
+  .sheet{margin-top:18px;}
+  .sheet-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px;color:var(--ink-faint);}
+  .sheet-head .tag{font-family:var(--font-en);letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--rule-hard);border-radius:999px;padding:3px 9px;white-space:nowrap;}
+  .sheet-head .tag.live{color:var(--green);border-color:var(--green);}
+  .sheet-head .thumb{width:34px;height:34px;object-fit:cover;border-radius:7px;border:1px solid var(--rule-hard);flex:none;}
+  .sheet-head .count{margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+  ol.lines{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+  li.line{
+    background:var(--card);border:1px solid var(--rule);border-radius:var(--radius);
+    padding:13px 14px 13px 12px;display:flex;gap:11px;align-items:flex-start;box-shadow:var(--shadow);
+  }
+  li.line .no{font-family:var(--font-en);font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink-faint);flex:none;min-width:1.4em;text-align:right;padding-top:5px;}
+  li.line .body{flex:1;min-width:0;}
+  li.line .en{
+    font-family:var(--font-en);font-size:19px;line-height:1.45;font-weight:500;
+    overflow-wrap:break-word;display:inline;
+    background-image:linear-gradient(var(--red),var(--red));
+    background-repeat:no-repeat;background-size:0 2px;background-position:0 100%;
+    transition:background-size .28s ease;
+  }
+  li.line .spk{flex:none;align-self:center;width:38px;height:38px;border-radius:50%;border:1px solid var(--rule);background:var(--card-2);display:grid;place-items:center;color:var(--blue-ink);}
+  li.line.word .en{font-size:22px;font-weight:600;}
+  li.line.heading .en{font-size:15px;font-weight:600;color:var(--ink-soft);}
+  li.line.now{border-color:var(--red);background:var(--red-wash);box-shadow:var(--shadow-lift);}
+  li.line.now .en{background-size:100% 2px;}
+  li.line.now .spk{border-color:var(--red);color:var(--red);background:var(--card);}
+  li.line.now .no{color:var(--red);font-weight:600;}
+  li.line .edit{
+    width:100%;font-family:var(--font-en);font-size:18px;line-height:1.4;
+    background:var(--card-2);color:var(--ink);border:1px solid var(--blue);border-radius:9px;padding:8px 10px;
+  }
+  li.line .del{flex:none;align-self:center;width:34px;height:34px;border-radius:50%;border:1px solid var(--rule);background:var(--card-2);color:var(--red);display:grid;place-items:center;font-size:17px;line-height:1;}
+  .empty{text-align:center;color:var(--ink-faint);font-size:14px;border:1px dashed var(--rule-hard);border-radius:var(--radius);padding:28px 16px;}
+
+  .dock{
+    position:fixed;left:0;right:0;bottom:0;z-index:20;
+    background:var(--paper);border-top:1px solid var(--rule);
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .dock-inner{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:10px;}
+  .play{background:var(--blue);color:#fff;border:none;border-radius:var(--radius);padding:15px;font-weight:700;font-size:17px;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:var(--shadow);}
+  .play.stopping{background:var(--red);}
+  .play:disabled{opacity:.45;box-shadow:none;}
+  .play .pos{font-family:var(--font-en);font-variant-numeric:tabular-nums;font-weight:500;opacity:.85;font-size:14px;}
+  .controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .ctl{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-soft);}
+  .ctl.speed{flex:1 1 150px;min-width:140px;}
+  .ctl label{white-space:nowrap;}
+  input[type="range"]{flex:1;min-width:70px;accent-color:var(--blue);height:24px;}
+  select{font-family:inherit;font-size:13px;background:var(--card);color:var(--ink);border:1px solid var(--rule-hard);border-radius:8px;padding:5px 7px;max-width:130px;}
+  .hint{font-size:12px;color:var(--ink-faint);text-align:center;margin:14px 0 0;}
+  svg{display:block;}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="bar">
+    <h1>おんどくカメラ<span class="dot">.</span></h1>
+    <button class="ghost" id="btnHistory" aria-pressed="false">きろく</button>
+  </header>
+
+  <section class="capture">
+    <p class="lead">プリントを撮ると、印刷された英文だけを抜き出して読み上げます。</p>
+    <div class="btns">
+      <button class="primary" id="btnCamera">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        プリントを撮る
+      </button>
+      <button class="secondary" id="btnLibrary">写真から選ぶ</button>
+    </div>
+    <button class="linky" id="btnManual">キーボードで英文を入れる</button>
+  </section>
+
+  <section class="panel" id="history" hidden>
+    <h2>さいきん読んだプリント</h2>
+    <ul class="hist" id="histList"></ul>
+    <button class="linky" id="btnClearHist">きろくを全部けす</button>
+  </section>
+
+  <section class="panel" id="manual" hidden>
+    <textarea id="manualText" placeholder="英文を貼りつけるか、入力してください。&#10;1行に1文ずつ。" spellcheck="false"></textarea>
+    <button class="secondary" id="btnManualGo">この英文を読み上げる</button>
+  </section>
+
+  <div class="status" id="status" hidden>
+    <div class="spinner" id="statusSpin"></div>
+    <div class="txt">
+      <strong id="statusTitle"></strong>
+      <span id="statusNote"></span>
+      <div class="prog" id="statusProg" hidden><i id="statusBar"></i></div>
+    </div>
+    <button class="ghost" id="statusAction" hidden></button>
+  </div>
+
+  <section class="sheet">
+    <div class="sheet-head">
+      <img class="thumb" id="thumb" alt="" hidden>
+      <span class="tag" id="sheetTag">サンプル</span>
+      <span id="sheetNote">撮ると入れかわります</span>
+      <span class="count" id="sheetCount"></span>
+    </div>
+    <ol class="lines" id="lines"></ol>
+  </section>
+
+  <p class="hint" id="hint">英文をタップすると、その1行だけをくりかえします。</p>
+</div>
+
+<div class="dock">
+  <div class="dock-inner">
+    <button class="play" id="playAll">
+      <svg id="playIcon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+      <span id="playLabel">ぜんぶ読む</span>
+      <span class="pos" id="playPos"></span>
+    </button>
+    <div class="controls">
+      <div class="ctl speed">
+        <label for="rate">はやさ</label>
+        <input type="range" id="rate" min="0.5" max="1.2" step="0.05" value="0.85">
+        <span id="rateVal" style="font-variant-numeric:tabular-nums;font-family:var(--font-en)">0.85</span>
+      </div>
+      <div class="ctl">
+        <label for="repeat">くりかえし</label>
+        <select id="repeat"><option value="1">1回</option><option value="2">2回</option><option value="3">3回</option></select>
+      </div>
+      <button class="ghost" id="btnFix" aria-pressed="false">なおす</button>
+      <div class="ctl" id="voiceWrap" hidden>
+        <label for="voice">声</label>
+        <select id="voice"></select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileCamera" accept="image/*" capture="environment" hidden>
+<input type="file" id="fileLibrary" accept="image/*" hidden>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* ================= state ================= */
+  var items = [];
+  var playing = false, singleMode = false, cursor = -1, loopLeft = 0;
+  var fixMode = false;
+  var objUrl = null;
+  var worker = null, workerReady = null, busy = false;
+  var keepAlive = null;
+  var prefs = { rate:0.85, repeat:1, voice:"" };
+
+  var SAMPLE = [
+    { en:"Read the passage and answer the questions.", kind:"heading" },
+    { en:"library", kind:"word" },
+    { en:"borrow", kind:"word" },
+    { en:"I go to the library every Saturday.", kind:"sentence" },
+    { en:"She borrowed three books yesterday.", kind:"sentence" },
+    { en:"Where does he go on Saturday?", kind:"sentence" }
+  ];
+
+  function loadPrefs(){
+    try{ var r = localStorage.getItem("ondoku-prefs");
+      if(r){ var p = JSON.parse(r); for(var k in prefs) if(p[k] !== undefined) prefs[k] = p[k]; }
+    }catch(e){}
+  }
+  function savePrefs(){ try{ localStorage.setItem("ondoku-prefs", JSON.stringify(prefs)); }catch(e){} }
+
+  /* ================= history ================= */
+  function getHistory(){
+    try{ var r = localStorage.getItem("ondoku-history"); return r ? (JSON.parse(r) || []) : []; }
+    catch(e){ return []; }
+  }
+  function pushHistory(list){
+    try{
+      var h = getHistory();
+      h.unshift({ t: Date.now(), items: list });
+      localStorage.setItem("ondoku-history", JSON.stringify(h.slice(0, 10)));
+    }catch(e){}
+    renderHistory();
+  }
+  function renderHistory(){
+    var h = getHistory(), ul = $("histList");
+    ul.innerHTML = "";
+    if(!h.length){
+      var li = document.createElement("li");
+      li.innerHTML = '<span style="color:var(--ink-faint);font-size:13px">まだありません。</span>';
+      ul.appendChild(li);
+      return;
+    }
+    h.forEach(function(rec){
+      var li = document.createElement("li");
+      var b = document.createElement("button");
+      var d = new Date(rec.t);
+      var when = (d.getMonth()+1) + "/" + d.getDate() + " " + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+      var sp1 = document.createElement("span"); sp1.className = "when"; sp1.textContent = when + " ・ " + rec.items.length + "行";
+      var sp2 = document.createElement("span"); sp2.className = "peek"; sp2.textContent = (rec.items[0] && rec.items[0].en) || "";
+      b.appendChild(sp1); b.appendChild(sp2);
+      b.addEventListener("click", function(){
+        setSheet(rec.items.slice(), "きろく", false);
+        $("history").hidden = true;
+        $("btnHistory").setAttribute("aria-pressed","false");
+      });
+      li.appendChild(b);
+      ul.appendChild(li);
+    });
+  }
+
+  /* ================= speech ================= */
+  var synth = window.speechSynthesis;
+  var voices = [], chosenVoice = null;
+
+  function pickVoices(){
+    if(!synth) return;
+    var all = [];
+    try{ all = synth.getVoices() || []; }catch(e){ return; }
+    if(!all.length) return;
+    voices = all.filter(function(v){ return /^en(-|_|$)/i.test(v.lang || ""); });
+    if(!voices.length) voices = all.slice();
+    var sel = $("voice");
+    sel.innerHTML = "";
+    voices.forEach(function(v,i){
+      var o = document.createElement("option");
+      o.value = String(i); o.textContent = v.name.replace(/\s*\(.*\)$/, "");
+      sel.appendChild(o);
+    });
+    var idx = 0;
+    if(prefs.voice){
+      var f = -1;
+      for(var i=0;i<voices.length;i++) if(voices[i].name === prefs.voice){ f = i; break; }
+      if(f >= 0) idx = f;
+    } else {
+      for(var j=0;j<voices.length;j++) if(/^en[-_]US/i.test(voices[j].lang||"")){ idx = j; break; }
+    }
+    sel.value = String(idx);
+    chosenVoice = voices[idx] || null;
+    $("voiceWrap").hidden = voices.length < 2;
+  }
+
+  function speak(text, onDone){
+    if(!synth){ onDone && onDone(); return; }
+    try{ synth.cancel(); }catch(e){}
+    var u = new SpeechSynthesisUtterance(text);
+    if(chosenVoice){ u.voice = chosenVoice; u.lang = chosenVoice.lang; } else { u.lang = "en-US"; }
+    u.rate = prefs.rate; u.pitch = 1;
+    var fired = false;
+    var finish = function(){ if(fired) return; fired = true; onDone && onDone(); };
+    u.onend = finish; u.onerror = finish;
+    clearInterval(keepAlive);
+    keepAlive = setInterval(function(){
+      try{ if(synth.speaking && !synth.paused){ synth.pause(); synth.resume(); } else clearInterval(keepAlive); }
+      catch(e){ clearInterval(keepAlive); }
+    }, 10000);
+    setTimeout(function(){ try{ synth.speak(u); }catch(e){ finish(); } }, 0);
+  }
+  function stopSpeaking(){ clearInterval(keepAlive); try{ synth && synth.cancel(); }catch(e){} }
+
+  /* ================= playback ================= */
+  function setNow(i){
+    var els = $("lines").children;
+    for(var k=0;k<els.length;k++) els[k].classList.toggle("now", k === i);
+    if(i >= 0 && els[i]){ try{ els[i].scrollIntoView({ block:"center", behavior:"smooth" }); }catch(e){} }
+    $("playPos").textContent = (playing && !singleMode && i >= 0) ? (i+1) + " / " + items.length : "";
+  }
+  function playFrom(i, single){
+    if(!items.length) return;
+    playing = true; singleMode = !!single; cursor = i; loopLeft = prefs.repeat;
+    updatePlayButton(); step();
+  }
+  function step(){
+    if(!playing) return;
+    if(cursor < 0 || cursor >= items.length){ stopAll(); return; }
+    setNow(cursor);
+    speak(items[cursor].en, function(){
+      if(!playing) return;
+      loopLeft -= 1;
+      if(loopLeft > 0){ setTimeout(step, 420); return; }
+      if(singleMode){ stopAll(); return; }
+      cursor += 1; loopLeft = prefs.repeat;
+      if(cursor >= items.length){ stopAll(); return; }
+      setTimeout(step, 520);
+    });
+  }
+  function stopAll(){
+    playing = false; singleMode = false; cursor = -1;
+    stopSpeaking(); setNow(-1); updatePlayButton();
+  }
+  function updatePlayButton(){
+    var btn = $("playAll");
+    btn.classList.toggle("stopping", playing);
+    $("playLabel").textContent = playing ? "とめる" : "ぜんぶ読む";
+    $("playIcon").innerHTML = playing
+      ? '<rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect>'
+      : '<path d="M8 5v14l11-7z"></path>';
+    btn.disabled = !items.length || !synth || fixMode;
+    if(!playing) $("playPos").textContent = "";
+  }
+
+  /* ================= rendering ================= */
+  function render(){
+    var ol = $("lines");
+    ol.innerHTML = "";
+    if(!items.length){
+      var p = document.createElement("li");
+      p.className = "empty";
+      p.textContent = "英文がありません。プリントを撮りなおしてください。";
+      ol.appendChild(p);
+      $("sheetCount").textContent = "";
+      updatePlayButton();
+      return;
+    }
+    items.forEach(function(it, i){
+      var li = document.createElement("li");
+      li.className = "line " + (it.kind || "sentence");
+
+      var no = document.createElement("span");
+      no.className = "no"; no.textContent = String(i+1);
+      li.appendChild(no);
+
+      var body = document.createElement("div");
+      body.className = "body";
+
+      if(fixMode){
+        var inp = document.createElement("input");
+        inp.type = "text"; inp.className = "edit"; inp.value = it.en;
+        inp.setAttribute("aria-label", (i+1) + "行目の英文");
+        inp.addEventListener("input", function(){ items[i].en = inp.value; });
+        body.appendChild(inp);
+        li.appendChild(body);
+
+        var del = document.createElement("button");
+        del.className = "del"; del.type = "button";
+        del.setAttribute("aria-label", (i+1) + "行目をけす");
+        del.textContent = "×";
+        del.addEventListener("click", function(){
+          items.splice(i,1);
+          items = items.filter(function(x){ return x.en.trim(); });
+          render();
+        });
+        li.appendChild(del);
+      } else {
+        var en = document.createElement("span");
+        en.className = "en"; en.textContent = it.en;
+        body.appendChild(en);
+        li.appendChild(body);
+
+        var spk = document.createElement("span");
+        spk.className = "spk";
+        spk.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>';
+        li.appendChild(spk);
+
+        li.tabIndex = 0;
+        li.setAttribute("role","button");
+        li.setAttribute("aria-label", it.en + " を読み上げる");
+        li.addEventListener("click", function(){ onLineTap(i); });
+        li.addEventListener("keydown", function(e){
+          if(e.key === "Enter" || e.key === " "){ e.preventDefault(); onLineTap(i); }
+        });
+      }
+      ol.appendChild(li);
+    });
+    $("sheetCount").textContent = items.length + " 行";
+    updatePlayButton();
+  }
+
+  function onLineTap(i){
+    if(playing && cursor === i){ stopAll(); return; }
+    stopSpeaking();
+    playFrom(i, true);
+  }
+
+  function setSheet(list, tagText, remember){
+    stopAll();
+    if(fixMode) setFixMode(false);
+    items = list;
+    var tag = $("sheetTag");
+    tag.textContent = tagText;
+    tag.classList.add("live");
+    $("sheetNote").textContent = "タップで1行ずつ";
+    render();
+    if(remember && list.length) pushHistory(list);
+    try{ $("lines").scrollIntoView({ block:"start", behavior:"smooth" }); }catch(e){}
+  }
+
+  function setFixMode(on){
+    fixMode = !!on;
+    $("btnFix").setAttribute("aria-pressed", fixMode ? "true" : "false");
+    $("hint").textContent = fixMode
+      ? "まちがった文字を直したり、いらない行を × でけせます。"
+      : "英文をタップすると、その1行だけをくりかえします。";
+    if(!fixMode) items = items.filter(function(x){ return x.en.trim(); });
+    stopAll();
+    render();
+  }
+
+  /* ================= status ================= */
+  function showStatus(title, note, opts){
+    opts = opts || {};
+    var s = $("status");
+    s.hidden = false;
+    s.classList.toggle("err", !!opts.error);
+    $("statusSpin").hidden = !opts.busy;
+    $("statusTitle").textContent = title;
+    $("statusNote").textContent = note || "";
+    $("statusProg").hidden = (opts.progress === undefined);
+    if(opts.progress !== undefined) $("statusBar").style.width = Math.round(opts.progress*100) + "%";
+    var act = $("statusAction");
+    if(opts.actionLabel){ act.hidden = false; act.textContent = opts.actionLabel; act.onclick = opts.onAction || null; }
+    else { act.hidden = true; act.onclick = null; }
+  }
+  function hideStatus(){ $("status").hidden = true; $("statusAction").onclick = null; }
+
+  /* ================= image preparation ================= */
+  async function prepare(file){
+    var bmp;
+    try{ bmp = await createImageBitmap(file, { imageOrientation:"from-image" }); }
+    catch(e){ bmp = await createImageBitmap(file); }
+
+    var long = Math.max(bmp.width, bmp.height);
+    var scale = 1;
+    if(long > 2400) scale = 2400 / long;
+    else if(long < 1500) scale = Math.min(2, 1500 / long);
+
+    var w = Math.max(1, Math.round(bmp.width * scale));
+    var h = Math.max(1, Math.round(bmp.height * scale));
+    var cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    var ctx = cv.getContext("2d", { willReadFrequently:true });
+    ctx.drawImage(bmp, 0, 0, w, h);
+    if(bmp.close) bmp.close();
+
+    // グレースケール化 + コントラストを伸ばす（スマホ写真のムラ対策）
+    try{
+      var img = ctx.getImageData(0, 0, w, h);
+      var d = img.data, hist = new Uint32Array(256), i, g;
+      for(i = 0; i < d.length; i += 4){
+        g = (d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114) | 0;
+        d[i] = d[i+1] = d[i+2] = g;
+        hist[g]++;
+      }
+      var total = w*h, lo = 0, hi = 255, acc = 0, cut = total * 0.02;
+      for(i = 0; i < 256; i++){ acc += hist[i]; if(acc > cut){ lo = i; break; } }
+      acc = 0;
+      for(i = 255; i >= 0; i--){ acc += hist[i]; if(acc > cut){ hi = i; break; } }
+      if(hi - lo > 20){
+        var lut = new Uint8Array(256), span = hi - lo;
+        for(i = 0; i < 256; i++){
+          var v = Math.round((i - lo) * 255 / span);
+          lut[i] = v < 0 ? 0 : (v > 255 ? 255 : v);
+        }
+        for(i = 0; i < d.length; i += 4){ d[i] = d[i+1] = d[i+2] = lut[d[i]]; }
+      }
+      ctx.putImageData(img, 0, 0);
+    }catch(e){ /* 加工に失敗しても元画像のまま認識させる */ }
+
+    return cv;
+  }
+
+  /* ================= OCR ================= */
+  var STAGE = {
+    "loading tesseract core":"エンジンを読みこんでいます",
+    "initializing tesseract":"エンジンを準備しています",
+    "loading language traineddata":"英語の辞書を読みこんでいます",
+    "initializing api":"準備しています",
+    "recognizing text":"文字を読み取っています"
+  };
+
+  function getWorker(){
+    if(workerReady) return workerReady;
+    workerReady = (async function(){
+      if(typeof Tesseract === "undefined") throw new Error("no-tesseract");
+      return await Tesseract.createWorker("eng", 1, {
+        logger: function(m){
+          var label = STAGE[m.status] || "処理中";
+          var p = (typeof m.progress === "number") ? m.progress : 0;
+          showStatus(label + "…", "はじめの1回だけ、少し時間がかかります。", { busy:true, progress:p });
+        }
+      });
+    })();
+    workerReady.catch(function(){ workerReady = null; });
+    return workerReady;
+  }
+
+  async function readPhoto(file){
+    if(busy) return;
+    busy = true;
+    stopAll();
+    try{
+      showStatus("写真を準備しています…", "", { busy:true, progress:0 });
+      var canvas = await prepare(file);
+
+      worker = await getWorker();
+
+      showStatus("文字を読み取っています…", "", { busy:true, progress:0 });
+      var res = await worker.recognize(canvas, {}, { text:true, blocks:true });
+
+      var raw = extractLines(res && res.data);
+      var list = cleanUp(raw);
+
+      if(!list.length){
+        showStatus("英文が見つかりませんでした", "明るい場所で、プリントが画面いっぱいに写るように撮りなおしてください。", { error:true });
+        return;
+      }
+      hideStatus();
+      setSheet(list, "このプリント", true);
+    }catch(err){
+      var msg = (err && err.message) || "";
+      if(msg === "no-tesseract"){
+        showStatus("読み取りエンジンを読みこめませんでした", "通信できる状態で一度開くと、次からはオフラインでも使えます。", { error:true });
+      } else {
+        showStatus("読み取りに失敗しました", "もう一度撮りなおしてください。それでも直らないときは、ページを開き直してください。", { error:true });
+      }
+      if(window.console) console.error(err);
+    }finally{
+      busy = false;
+    }
+  }
+
+  // blocks → paragraphs → lines を辿る。構造が変わっても text だけは拾えるようにする。
+  function extractLines(data){
+    var out = [];
+    if(!data) return out;
+    (function walk(node){
+      if(!node || typeof node !== "object") return;
+      if(Array.isArray(node)){ node.forEach(walk); return; }
+      if(Array.isArray(node.lines)){
+        node.lines.forEach(function(l){
+          if(l && typeof l.text === "string"){
+            out.push({ text:l.text, conf: (typeof l.confidence === "number") ? l.confidence : 100 });
+          }
+        });
+      }
+      ["blocks","paragraphs","children"].forEach(function(k){
+        if(Array.isArray(node[k])) node[k].forEach(walk);
+      });
+    })(data.blocks);
+    if(!out.length && typeof data.text === "string"){
+      data.text.split(/\r?\n/).forEach(function(t){ out.push({ text:t, conf:100 }); });
+    }
+    return out;
+  }
+
+  function looksLikeJunk(s){
+    var letters = (s.match(/[A-Za-z]/g) || []).length;
+    if(letters < 2) return true;
+    var solid = s.replace(/\s/g, "").length;
+    if(!solid) return true;
+    if(letters / solid < 0.5) return true;                 // 記号や数字だらけ
+    if(/^[A-Z]{1,2}\s?\d{1,3}\s?[ab]?$/.test(s)) return true; // 公文の教材番号
+    if(/^(kumon|name|date)$/i.test(s)) return true;
+    return false;
+  }
+
+  function cleanUp(raw){
+    // 1) 掃除
+    var lines = [];
+    raw.forEach(function(r){
+      var t = String(r.text || "").replace(/\s+/g, " ").trim();
+      t = t.replace(/[|_~^`]+/g, " ").replace(/\s+/g, " ").trim();
+      if(!t) return;
+      if(r.conf < 50) return;
+      if(looksLikeJunk(t)) return;
+      lines.push(t);
+    });
+
+    // 2) 折り返された文をつなぐ。
+    //    つなぐのは「複数語で終止符がない行」の続きだけ。単語リストの1語ずつは別々に保つ。
+    var joined = [];
+    for(var i = 0; i < lines.length; i++){
+      var cur = lines[i];
+      while(i + 1 < lines.length
+            && /\s/.test(cur)
+            && !/[.!?:;"']$/.test(cur)
+            && /^[a-z]/.test(lines[i+1])){
+        cur = cur + " " + lines[i+1];
+        i++;
+      }
+      joined.push(cur);
+    }
+
+    // 3) 1行に複数の文があれば分ける
+    var out = [];
+    joined.forEach(function(line){
+      var parts = line.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [line];
+      parts.forEach(function(p){
+        p = p.trim();
+        if(!p || looksLikeJunk(p)) return;
+        if(out.length && out[out.length-1].en === p) return;  // 直前と同じなら捨てる
+        out.push({ en:p, kind: /\s/.test(p) ? "sentence" : "word" });
+      });
+    });
+    return out.slice(0, 120);
+  }
+
+  /* ================= manual input ================= */
+  function parseManual(text){
+    var out = [];
+    text.split(/\r?\n/).forEach(function(line){
+      line = line.trim();
+      if(!line) return;
+      var parts = line.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [line];
+      parts.forEach(function(p){
+        p = p.trim();
+        if(p) out.push({ en:p, kind: /\s/.test(p) ? "sentence" : "word" });
+      });
+    });
+    return out.slice(0, 120);
+  }
+
+  /* ================= wiring ================= */
+  loadPrefs();
+  $("rate").value = String(prefs.rate);
+  $("rateVal").textContent = Number(prefs.rate).toFixed(2);
+  $("repeat").value = String(prefs.repeat);
+
+  $("rate").addEventListener("input", function(){
+    prefs.rate = parseFloat(this.value);
+    $("rateVal").textContent = prefs.rate.toFixed(2);
+    savePrefs();
+  });
+  $("repeat").addEventListener("change", function(){
+    prefs.repeat = parseInt(this.value, 10) || 1; savePrefs();
+  });
+  $("voice").addEventListener("change", function(){
+    chosenVoice = voices[parseInt(this.value, 10)] || null;
+    prefs.voice = chosenVoice ? chosenVoice.name : "";
+    savePrefs();
+  });
+  $("btnFix").addEventListener("click", function(){ setFixMode(!fixMode); });
+  $("playAll").addEventListener("click", function(){
+    if(playing){ stopAll(); return; }
+    playFrom(0, false);
+  });
+
+  function handleFile(file){
+    if(!file) return;
+    if(objUrl){ URL.revokeObjectURL(objUrl); objUrl = null; }
+    objUrl = URL.createObjectURL(file);
+    var t = $("thumb"); t.src = objUrl; t.hidden = false;
+    readPhoto(file);
+  }
+  $("btnCamera").addEventListener("click", function(){ $("fileCamera").click(); });
+  $("btnLibrary").addEventListener("click", function(){ $("fileLibrary").click(); });
+  $("fileCamera").addEventListener("change", function(){ handleFile(this.files && this.files[0]); this.value = ""; });
+  $("fileLibrary").addEventListener("change", function(){ handleFile(this.files && this.files[0]); this.value = ""; });
+
+  $("btnManual").addEventListener("click", function(){
+    $("manual").hidden = false;
+    $("btnManual").hidden = true;
+    try{ $("manualText").focus({ preventScroll:true }); }catch(e){}
+  });
+  $("btnManualGo").addEventListener("click", function(){
+    var list = parseManual($("manualText").value || "");
+    if(!list.length){ showStatus("英文が入力されていません", "1行に1文ずつ入れてください。", { error:true }); return; }
+    hideStatus();
+    setSheet(list, "入力した英文", true);
+  });
+
+  $("btnHistory").addEventListener("click", function(){
+    var open = $("history").hidden;
+    $("history").hidden = !open;
+    this.setAttribute("aria-pressed", open ? "true" : "false");
+    if(open) renderHistory();
+  });
+  $("btnClearHist").addEventListener("click", function(){
+    try{ localStorage.removeItem("ondoku-history"); }catch(e){}
+    renderHistory();
+  });
+
+  if(synth){
+    pickVoices();
+    try{ synth.addEventListener("voiceschanged", pickVoices); }catch(e){ synth.onvoiceschanged = pickVoices; }
+    setTimeout(pickVoices, 600);
+    setTimeout(pickVoices, 2000);
+  } else {
+    showStatus("この端末では読み上げができません", "Safari か Chrome で開いてみてください。", { error:true });
+  }
+
+  window.addEventListener("pagehide", function(){
+    stopSpeaking();
+    if(worker && worker.terminate) { try{ worker.terminate(); }catch(e){} }
+  });
+  document.addEventListener("visibilitychange", function(){ if(document.hidden) stopAll(); });
+
+  items = SAMPLE.slice();
+  render();
+  renderHistory();
+
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("sw.js").catch(function(){});
+    });
+  }
+
+  // ローカル検証用の入口（通常の利用では使いません）
+  window.__ondoku = { readPhoto: readPhoto, cleanUp: cleanUp, getItems: function(){ return items; } };
+})();
+</script>
+</body>
+</html>
